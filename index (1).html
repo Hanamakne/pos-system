@@ -1,0 +1,2790 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ລະບົບຂາຍໜ້າຮ້ານ POS (Cloud)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --navy:#16213E;
+    --navy-light:#233258;
+    --amber:#E8A33D;
+    --amber-dark:#C6821F;
+    --cream:#F7F5EF;
+    --paper:#FFFFFF;
+    --ink:#1A1A1A;
+    --muted:#6B7280;
+    --danger:#D64545;
+    --danger-bg:#FBE9E9;
+    --success:#2E8B57;
+    --border:#E3DFD4;
+    --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Lao", "Phetsarath OT", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--cream);color:var(--ink);font-family:var(--sans);}
+  button{font-family:inherit;cursor:pointer;}
+  input,select{font-family:inherit;}
+  ::selection{background:var(--amber);color:#fff;}
+
+  /* Header */
+  .topbar{
+    background:var(--navy);color:#fff;
+    display:flex;align-items:center;gap:16px;
+    padding:12px 20px;position:sticky;top:0;z-index:40;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  .brand{display:flex;align-items:center;gap:10px;margin-right:8px;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;background:var(--amber);
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:16px;
+    flex-shrink:0;
+  }
+  .brand-name{font-weight:700;font-size:15px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+  .tabs{display:flex;gap:4px;flex:1;overflow-x:auto;}
+  .tab-btn{
+    background:transparent;border:none;color:#C9D2E8;padding:9px 16px;border-radius:8px;
+    font-size:14px;font-weight:600;white-space:nowrap;transition:.15s;
+  }
+  .tab-btn:hover{background:var(--navy-light);color:#fff;}
+  .tab-btn.active{background:var(--amber);color:var(--navy);}
+  .icon-btn{
+    background:var(--navy-light);border:none;color:#fff;width:36px;height:36px;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;
+  }
+  .icon-btn:hover{background:#2C3D68;}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:20px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* POS layout */
+  .pos-grid{display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;}
+  @media (max-width:900px){.pos-grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--paper);border:1px solid var(--border);border-radius:14px;padding:16px;}
+  .scan-row{display:flex;gap:10px;margin-bottom:14px;}
+  .scan-input{
+    flex:1;border:2px solid var(--navy);border-radius:10px;padding:12px 14px;font-size:16px;
+    outline:none;font-family:var(--mono);background:#fff;
+  }
+  .scan-input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(232,163,61,.25);}
+  .scan-hint{font-size:12px;color:var(--muted);margin:-8px 0 14px 2px;}
+
+  .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-height:64vh;overflow-y:auto;padding-right:4px;}
+  .product-card{
+    border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff;text-align:left;
+    display:flex;flex-direction:column;gap:6px;transition:.12s;
+  }
+  .product-card:hover{border-color:var(--amber);transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,.06);}
+  .product-card:disabled{opacity:.4;cursor:not-allowed;}
+  .p-thumb{width:100%;aspect-ratio:1/1;border-radius:8px;object-fit:cover;background:var(--cream);display:block;}
+  .p-thumb-placeholder{width:100%;aspect-ratio:1/1;border-radius:8px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--muted);}
+  .p-name{font-weight:700;font-size:13.5px;line-height:1.3;}
+  .p-price{font-family:var(--mono);font-weight:700;color:var(--navy);font-size:14px;}
+  .p-stock{font-size:11px;color:var(--muted);}
+  .p-stock.low{color:var(--danger);font-weight:700;}
+  .empty-state{padding:40px 10px;text-align:center;color:var(--muted);}
+
+  .cart-card{position:sticky;top:76px;display:flex;flex-direction:column;max-height:calc(100vh - 96px);}
+  .cart-title{font-weight:800;font-size:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+  .cart-list{overflow-y:auto;flex:1;min-height:80px;max-height:38vh;}
+  .cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--border);}
+  .cart-item:last-child{border-bottom:none;}
+  .ci-info{flex:1;min-width:0;}
+  .ci-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ci-price{font-size:11.5px;color:var(--muted);font-family:var(--mono);}
+  .qty-stepper{display:flex;align-items:center;gap:6px;}
+  .qty-btn{width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .qty-btn:hover{background:var(--cream);}
+  .qty-val{width:24px;text-align:center;font-family:var(--mono);font-weight:700;font-size:13px;}
+  .ci-total{width:70px;text-align:right;font-family:var(--mono);font-weight:700;font-size:13px;}
+  .ci-remove{color:var(--danger);background:none;border:none;font-size:16px;padding:0 2px;}
+
+  .cart-summary{border-top:2px solid var(--navy);margin-top:10px;padding-top:10px;}
+  .sum-row{display:flex;justify-content:space-between;font-size:13.5px;padding:3px 0;color:var(--muted);}
+  .sum-row.total{color:var(--ink);font-weight:800;font-size:19px;font-family:var(--mono);border-top:1px solid var(--border);margin-top:6px;padding-top:8px;}
+  .discount-input{width:90px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-family:var(--mono);}
+
+  .btn{border:none;border-radius:10px;padding:11px 18px;font-weight:700;font-size:14px;transition:.15s;}
+  .btn-amber{background:var(--amber);color:var(--navy);}
+  .btn-amber:hover{background:var(--amber-dark);color:#fff;}
+  .btn-amber:disabled{background:#EAD9B8;color:#a89469;cursor:not-allowed;}
+  .btn-navy{background:var(--navy);color:#fff;}
+  .btn-navy:hover{background:var(--navy-light);}
+  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--ink);}
+  .btn-outline:hover{background:var(--cream);}
+  .btn-danger{background:var(--danger-bg);color:var(--danger);}
+  .btn-danger:hover{background:var(--danger);color:#fff;}
+  .btn-block{width:100%;}
+  .btn-lg{padding:14px 18px;font-size:16px;}
+  .btn-sm{padding:6px 10px;font-size:12.5px;border-radius:7px;}
+
+  /* Toolbar */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+  .toolbar .search{flex:1;min-width:180px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:14px;}
+  .spacer{flex:1;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--navy);}
+  tbody td{padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tbody tr:hover{background:#FBFAF6;}
+  tbody tr.low-stock{background:var(--danger-bg);}
+  .mono{font-family:var(--mono);}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
+  .badge.ok{background:#E4F3EA;color:var(--success);}
+  .badge.low{background:var(--danger-bg);color:var(--danger);}
+  .row-actions{display:flex;gap:6px;}
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;}
+  .table-wrap table{min-width:600px;}
+
+  /* Modal */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(22,33,62,.55);
+    align-items:center;justify-content:center;z-index:100;padding:16px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{background:#fff;border-radius:16px;padding:22px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
+  .modal.wide{max-width:640px;}
+  .modal h3{margin:0 0 16px;font-size:17px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:5px;}
+  .field input,.field select{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:14px;}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .pay-method-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .pay-method-btn{border:1px solid var(--border);border-radius:9px;padding:10px 6px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;}
+  .pay-method-btn.active{border-color:var(--amber);background:#FDF3E3;font-weight:800;}
+  .mov-type-btn{border:1px solid var(--border);border-radius:9px;padding:10px 6px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;}
+  .mov-type-btn.active{border-color:var(--navy);background:var(--cream);font-weight:800;}
+  .mov-item-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--border);}
+  .mov-item-row:last-child{border-bottom:none;}
+  .mov-item-name{flex:1;font-size:13px;font-weight:700;}
+  body.hide-profit .profit-col{display:none !important;}
+  .variant-row{display:grid;grid-template-columns:1.3fr 0.9fr 0.65fr 0.65fr 0.65fr auto;gap:6px;align-items:center;background:var(--cream);border-radius:8px;padding:8px;}
+  .variant-row input{border:1px solid var(--border);border-radius:6px;padding:6px 7px;font-size:12.5px;width:100%;}
+  .variant-row .vrow-remove{background:none;border:none;color:var(--danger);font-size:16px;padding:0 4px;}
+  .pick-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff;width:100%;text-align:left;}
+  .pick-row:hover{border-color:var(--amber);}
+  .pick-row:disabled{opacity:.4;cursor:not-allowed;}
+  .pick-row .pr-name{flex:1;font-weight:700;font-size:13.5px;}
+  .pick-row .pr-price{font-family:var(--mono);font-weight:700;color:var(--navy);font-size:13.5px;}
+  .pick-row .pr-stock{font-size:11px;color:var(--muted);}
+  .promo-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+  .promo-row .pn-name{flex:1;font-weight:700;font-size:13.5px;}
+  .promo-row .pn-detail{font-size:11.5px;color:var(--muted);font-family:var(--mono);}
+  .image-upload-row{display:flex;align-items:center;gap:12px;}
+  .image-preview{width:64px;height:64px;border-radius:10px;background:var(--cream);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden;flex-shrink:0;}
+  .image-preview img{width:100%;height:100%;object-fit:cover;}
+  .image-upload-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .row-thumb{width:34px;height:34px;border-radius:7px;object-fit:cover;background:var(--cream);display:block;}
+  .row-thumb-placeholder{width:34px;height:34px;border-radius:7px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--muted);}
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .modal-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;color:var(--muted);}
+  .import-tabs{display:flex;gap:6px;margin-bottom:14px;background:var(--cream);padding:4px;border-radius:10px;}
+  .import-tab-btn{flex:1;background:transparent;border:none;padding:8px;border-radius:7px;font-size:13px;font-weight:700;color:var(--muted);}
+  .import-tab-btn.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1);}
+  .import-pane{display:none;}
+  .import-pane.active{display:block;}
+  .helper-text{font-size:12px;color:var(--muted);line-height:1.6;background:var(--cream);border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+  .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:24px 12px;text-align:center;color:var(--muted);font-size:13.5px;cursor:pointer;}
+  .drop-zone:hover{border-color:var(--amber);color:var(--ink);}
+  .import-summary{font-size:13px;background:#E4F3EA;color:var(--success);border-radius:8px;padding:10px 12px;margin-top:12px;display:none;}
+
+  /* Receipt */
+  .receipt-preview{
+    font-family:var(--mono);background:#fff;border:1px dashed var(--border);
+    padding:16px;width:280px;margin:0 auto;font-size:12.5px;line-height:1.55;
+  }
+  .receipt-preview .shop{text-align:center;font-weight:800;font-size:14px;}
+  .receipt-preview .sub{text-align:center;color:var(--muted);font-size:11px;}
+  .receipt-preview hr{border:none;border-top:1px dashed #999;margin:8px 0;}
+  .rline{display:flex;justify-content:space-between;gap:8px;}
+  .ritem-name{flex:1;}
+  .center{text-align:center;}
+  .right{text-align:right;}
+
+  #receiptPrintArea{position:fixed;left:-9999px;top:0;width:58mm;background:#fff;}
+  @media print{
+    body *{visibility:hidden;}
+    #receiptPrintArea,#receiptPrintArea *{visibility:visible;}
+    #receiptPrintArea{position:absolute;left:0;top:0;}
+  }
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--navy);color:#fff;padding:11px 20px;border-radius:10px;font-size:13.5px;font-weight:600;
+    box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:200;opacity:0;pointer-events:none;transition:.25s;
+    max-width:90vw;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+
+  .stat-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .stat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 16px;flex:1;min-width:130px;}
+  .stat .label{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;}
+  .stat .value{font-family:var(--mono);font-weight:800;font-size:20px;margin-top:2px;}
+
+  .loading-screen{position:fixed;inset:0;background:var(--cream);display:flex;align-items:center;justify-content:center;z-index:500;font-weight:700;color:var(--navy);}
+</style>
+</head>
+<body>
+
+<div id="loadingScreen" class="loading-screen">ກຳລັງໂຫລດຂໍ້ມູນ...</div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">₭</div>
+    <div class="brand-name" id="shopNameDisplay">ຮ້ານຄ້າຂອງຂ້ອຍ</div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="pos">🧾 ຂາຍສິນຄ້າ</button>
+    <button class="tab-btn" data-tab="stock">📦 ຄັງສິນຄ້າ</button>
+    <button class="tab-btn" data-tab="movements">🔄 ເບີກ/ໂອນ/ອື່ນໆ</button>
+    <button class="tab-btn" data-tab="history">🕒 ປະຫວັດການຂາຍ</button>
+  </div>
+  <button class="icon-btn" id="staffBtn" title="ພະນັກງານ">👤</button>
+  <button class="icon-btn" id="syncBtn" title="ອັບເດດຂໍ້ມູນລ່າສຸດ">🔄</button>
+  <button class="icon-btn" id="settingsBtn" title="ຕັ້ງຄ່າຮ້ານ">⚙️</button>
+</div>
+
+<div class="wrap">
+
+  <!-- POS PANEL -->
+  <div class="panel active" id="panel-pos">
+    <div class="pos-grid">
+      <div>
+        <div class="card">
+          <div class="scan-row">
+            <input id="scanInput" class="scan-input" placeholder="🔍 ຍິງບາໂຄດ ຫຼື ພິມຄົ້ນຫາຊື່ສິນຄ້າ..." autocomplete="off">
+            <button class="btn btn-navy" id="cameraScanBtn" type="button" title="ສະແກນດ້ວຍກ້ອງ" style="flex-shrink:0;padding:12px 16px;">📷</button>
+          </div>
+          <div class="scan-hint">ເຊື່ອມເຄື່ອງຍິງບາໂຄດແລ້ວຍິງໄດ້ທັນທີ ຫຼືກົດ 📷 ເພື່ອສະແກນດ້ວຍກ້ອງມືຖື — ລະບົບຈະເພີ່ມລົງກະຕ່າອັດຕະໂນມັດ</div>
+          <div id="productGrid" class="product-grid"></div>
+        </div>
+      </div>
+      <div class="card cart-card">
+        <div class="cart-title">
+          <span>ກະຕ່າສິນຄ້າ</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-sm" id="managePromoBtn" title="ຈັດການໂປຣໂມຊັນ">🏷️</button>
+            <button class="btn btn-outline btn-sm" id="clearCartBtn">ລ້າງກະຕ່າ</button>
+          </div>
+        </div>
+        <div id="cartList" class="cart-list"></div>
+        <div class="cart-summary">
+          <div class="sum-row"><span>ຈຳນວນລາຍການ</span><span id="sumCount">0</span></div>
+          <div class="sum-row" style="align-items:center;">
+            <span>ໂປຣໂມຊັນ</span>
+            <select id="promoSelect" style="max-width:170px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12.5px;">
+              <option value="">ບໍ່ໃຊ້</option>
+            </select>
+          </div>
+          <div class="sum-row"><span>ສ່ວນຫຼຸດ</span><input type="number" min="0" id="discountInput" class="discount-input" value="0"></div>
+          <div class="sum-row total"><span>ລວມທັງໝົດ</span><span id="sumTotal">0</span></div>
+        </div>
+        <button class="btn btn-amber btn-lg btn-block" style="margin-top:12px;" id="checkoutBtn" disabled>ຊຳລະເງິນ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK PANEL -->
+  <div class="panel" id="panel-stock">
+    <div class="stat-row" id="stockStats"></div>
+    <div class="toolbar">
+      <input class="search" id="stockSearch" placeholder="ຄົ້ນຫາສິນຄ້າ / ບາໂຄດ...">
+      <div class="spacer"></div>
+      <button class="btn btn-outline" id="importBtn">⬆️ ນຳເຂົ້າ</button>
+      <button class="btn btn-outline" id="exportProductsBtn">⬇️ ສົ່ງອອກ Excel</button>
+      <button class="btn btn-navy" id="addProductBtn">+ ເພີ່ມສິນຄ້າ</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ຮູບ</th><th>ບາໂຄດ</th><th>ຊື່ສິນຄ້າ</th><th>ໜ່ວຍ</th><th>ທຶນ</th><th>ລາຄາຂາຍ</th><th>ຄົງເຫຼືອ</th><th>ສະຖານະ</th><th></th>
+        </tr></thead>
+        <tbody id="stockTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- STOCK MOVEMENTS PANEL (withdrawals / branch transfers / damaged / returns — never counted as sales) -->
+  <div class="panel" id="panel-movements">
+    <div class="stat-row" id="movementStats"></div>
+    <div class="toolbar">
+      <input type="date" class="search" id="movFrom" style="max-width:170px;">
+      <input type="date" class="search" id="movTo" style="max-width:170px;">
+      <select id="movTypeFilter" class="search" style="max-width:180px;">
+        <option value="">ທຸກປະເພດ</option>
+        <option value="withdrawal">ເບີກສິນຄ້າ</option>
+        <option value="transfer">ໂອນສາຂາ</option>
+        <option value="damaged">ສິນຄ້າເສຍ/ຂາດ</option>
+        <option value="return">ສົ່ງຄືນສິນຄ້າ</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn btn-outline" id="exportMovementsBtn">⬇️ ສົ່ງອອກ Excel</button>
+      <button class="btn btn-navy" id="addMovementBtn">+ ບັນທຶກລາຍການ</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ວັນທີ/ເວລາ</th><th>ປະເພດ</th><th>ລາຍການ</th><th>ຈຳນວນລວມ</th><th>ພະນັກງານ</th><th>ໝາຍເຫດ</th><th>ສະຖານະ</th><th></th></tr></thead>
+        <tbody id="movementTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- HISTORY PANEL -->
+  <div class="panel" id="panel-history">
+    <div class="stat-row" id="historyStats"></div>
+    <div class="toolbar">
+      <input type="date" class="search" id="histFrom" style="max-width:170px;">
+      <input type="date" class="search" id="histTo" style="max-width:170px;">
+      <div class="import-tabs" style="flex:0 0 auto;">
+        <button class="import-tab-btn active" data-histview="detail">🧾 ລາຍບິນ</button>
+        <button class="import-tab-btn" data-histview="daily">📅 ສະຫຼຸບລາຍວັນ</button>
+        <button class="import-tab-btn profit-col" data-histview="profit">💰 ກຳໄລຕາມສິນຄ້າ</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-outline" id="exportSalesBtn">⬇️ ສົ່ງອອກ Excel</button>
+    </div>
+    <div class="table-wrap" id="histDetailWrap">
+      <table>
+        <thead><tr><th>ເລກທີ່ໃບບິນ</th><th>ວັນທີ/ເວລາ</th><th>ລູກຄ້າ</th><th>ພະນັກງານ</th><th>ລາຍການ</th><th>ຍອດລວມ</th><th>ຊຳລະ</th><th>ສະຖານະ</th><th></th></tr></thead>
+        <tbody id="historyTableBody"></tbody>
+      </table>
+    </div>
+    <div class="table-wrap" id="histDailyWrap" style="display:none;">
+      <table>
+        <thead><tr><th>ວັນທີ</th><th>ຈຳນວນໃບບິນ</th><th>ຈຳນວນສິນຄ້າ</th><th>ຍອດຂາຍລວມ</th><th class="profit-col">ຕົ້ນທຶນ</th><th class="profit-col">ກຳໄລ</th><th class="profit-col">%ກຳໄລ</th><th></th></tr></thead>
+        <tbody id="historyDailyTableBody"></tbody>
+      </table>
+    </div>
+    <div class="table-wrap profit-col" id="histProfitWrap" style="display:none;">
+      <table>
+        <thead><tr><th>ຊື່ສິນຄ້າ</th><th>ຈຳນວນທີ່ຂາຍ</th><th>ຍອດຂາຍ</th><th>ຕົ້ນທຶນ</th><th>ກຳໄລ</th><th>%ກຳໄລ</th></tr></thead>
+        <tbody id="historyProfitTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="productModal">×</button>
+    <h3 id="productModalTitle">ເພີ່ມສິນຄ້າ</h3>
+    <input type="hidden" id="pf_id">
+    <input type="hidden" id="pf_image">
+    <div class="field">
+      <label>ຮູບສິນຄ້າ</label>
+      <div class="image-upload-row">
+        <div class="image-preview" id="pf_image_preview">📦</div>
+        <div class="image-upload-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="pf_image_pick">ເລືອກຮູບ</button>
+          <button type="button" class="btn btn-outline btn-sm" id="pf_image_remove" style="display:none;">ລຶບຮູບ</button>
+          <input type="file" id="pf_image_input" accept="image/*" style="display:none;">
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>ບາໂຄດ</label>
+      <input id="pf_barcode" placeholder="ຍິງບາໂຄດ ຫຼື ພິມເອງ" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>ຊື່ສິນຄ້າ *</label>
+      <input id="pf_name" placeholder="ເຊັ່ນ: ນ້ຳດື່ມ 600ml">
+    </div>
+    <div class="field-row">
+      <div class="field"><label>ໜ່ວຍ</label><input id="pf_unit" placeholder="ອັນ / ຂວດ / ກ່ອງ" value="ອັນ"></div>
+      <div class="field"><label>ຈຳນວນຄົງເຫຼືອ *</label><input id="pf_stock" type="number" min="0" value="0"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>ລາຄາທຶນ</label><input id="pf_cost" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label>ລາຄາຂາຍ *</label><input id="pf_price" type="number" min="0" step="0.01" value="0"></div>
+    </div>
+    <div class="field">
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>ຕົວເລືອກສິນຄ້າ (ຖ້າມີ ເຊັ່ນ ຂະໜາດ, ລົດຊາດ, ສີ)</span>
+        <button type="button" class="btn btn-outline btn-sm" id="pf_variant_add">+ ເພີ່ມຕົວເລືອກ</button>
+      </label>
+      <div id="pf_variant_list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"></div>
+      <div class="helper-text" style="margin-top:8px;display:none;" id="pf_variant_hint">ຖ້າມີຕົວເລືອກຢ່າງໜ້ອຍ 1 ອັນ ລະບົບຈະໃຊ້ບາໂຄດ/ລາຄາ/ສະຕັອກຂອງແຕ່ລະຕົວເລືອກແທນຄ່າຂ້າງເທິງ</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="productModal">ຍົກເລີກ</button>
+      <button class="btn btn-amber btn-block" id="saveProductBtn">ບັນທຶກ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Variant Pick Modal (POS) -->
+<div class="modal-overlay" id="variantPickModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="variantPickModal">×</button>
+    <h3 id="variantPickTitle">ເລືອກຕົວເລືອກ</h3>
+    <div id="variantPickList" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Stock Adjust Modal -->
+<div class="modal-overlay" id="adjustModal">
+  <div class="modal" style="position:relative;max-width:340px;">
+    <button class="modal-close" data-close="adjustModal">×</button>
+    <h3>ປັບປຸງສະຕັອກ</h3>
+    <div id="adjustProductName" style="font-weight:700;margin-bottom:10px;"></div>
+    <input type="hidden" id="adj_id">
+    <div class="field" id="adj_variant_field" style="display:none;">
+      <label>ຕົວເລືອກ</label>
+      <select id="adj_variant"></select>
+    </div>
+    <div class="field">
+      <label>ຮັບເຂົ້າ (+) ຫຼື ຕັດອອກ (-)</label>
+      <input id="adj_qty" type="number" placeholder="ເຊັ່ນ: 10 ຫຼື -5" step="1">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="adjustModal">ຍົກເລີກ</button>
+      <button class="btn btn-amber btn-block" id="saveAdjustBtn">ບັນທຶກ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Movement Modal (withdrawal / branch transfer / damaged / return) -->
+<div class="modal-overlay" id="movementModal">
+  <div class="modal wide" style="position:relative;">
+    <button class="modal-close" data-close="movementModal">×</button>
+    <h3>ບັນທຶກລາຍການເບີກ/ໂອນ/ອື່ນໆ</h3>
+    <div class="field">
+      <label>ປະເພດລາຍການ</label>
+      <div class="pay-method-row" style="grid-template-columns:1fr 1fr;">
+        <button type="button" class="mov-type-btn active" data-movtype="withdrawal">📤 ເບີກສິນຄ້າ</button>
+        <button type="button" class="mov-type-btn" data-movtype="transfer">🚚 ໂອນສາຂາ</button>
+        <button type="button" class="mov-type-btn" data-movtype="damaged">💔 ສິນຄ້າເສຍ/ຂາດ</button>
+        <button type="button" class="mov-type-btn" data-movtype="return">↩️ ສົ່ງຄືນສິນຄ້າ</button>
+      </div>
+      <input type="hidden" id="mov_type" value="withdrawal">
+    </div>
+    <div class="field">
+      <label id="mov_note_label">ໝາຍເຫດ (ບໍ່ບັງຄັບ)</label>
+      <input id="mov_note" placeholder="ເຊັ່ນ: ເບີກໃຫ້ພະນັກງານ, ຕົວຢ່າງສິນຄ້າ...">
+    </div>
+    <div class="field">
+      <label>ຄົ້ນຫາສິນຄ້າ</label>
+      <input id="mov_search" placeholder="ພິມຊື່ສິນຄ້າ ຫຼື ຍິງບາໂຄດ..." autocomplete="off">
+    </div>
+    <div id="mov_search_results" class="product-grid" style="max-height:180px;margin-bottom:10px;"></div>
+    <div id="mov_items_list" style="margin-bottom:10px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="movementModal">ຍົກເລີກ</button>
+      <button class="btn btn-amber btn-block" id="saveMovementBtn">ບັນທຶກ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Checkout Modal -->
+<div class="modal-overlay" id="checkoutModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="checkoutModal">×</button>
+    <h3>ຊຳລະເງິນ</h3>
+    <div class="sum-row total" style="margin-bottom:14px;"><span>ຍອດທີ່ຕ້ອງຊຳລະ</span><span id="co_total">0</span></div>
+    <div class="field">
+      <label>ຊື່ລູກຄ້າ (ບໍ່ບັງຄັບ)</label>
+      <input id="co_customer" placeholder="ຊື່ລູກຄ້າ...">
+    </div>
+    <div class="field">
+      <label>ວິທີຊຳລະ</label>
+      <div class="pay-method-row">
+        <button type="button" class="pay-method-btn active" data-pay="cash">💵 ເງິນສົດ</button>
+        <button type="button" class="pay-method-btn" data-pay="transfer">📲 ໂອນ</button>
+        <button type="button" class="pay-method-btn" data-pay="card">💳 ບັດ</button>
+        <button type="button" class="pay-method-btn" data-pay="credit">📒 ຄ້າງຈ່າຍ</button>
+      </div>
+      <input type="hidden" id="co_paymethod" value="cash">
+    </div>
+    <div class="field" id="co_received_field">
+      <label>ຮັບເງິນມາ</label>
+      <input id="co_received" type="number" min="0" step="0.01" placeholder="0">
+    </div>
+    <div class="sum-row" id="co_change_row" style="font-size:15px;"><span>ເງິນທອນ</span><span id="co_change" style="font-family:var(--mono);font-weight:800;">0</span></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="checkoutModal">ຍົກເລີກ</button>
+      <button class="btn btn-amber btn-block" id="confirmCheckoutBtn">ຢືນຢັນການຂາຍ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Receipt Modal -->
+<div class="modal-overlay" id="receiptModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="receiptModal">×</button>
+    <h3>ໃບບິນ</h3>
+    <div id="receiptPreview" class="receipt-preview"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="receiptModal">ປິດ</button>
+      <button class="btn btn-navy btn-block" id="printReceiptBtn">🖨️ ພິມ</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-block" id="cancelSaleBtn">ຍົກເລີກບິນ</button>
+      <button class="btn btn-outline btn-block" id="editSaleBtn">ແກ້ໄຂບິນ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="settingsModal">×</button>
+    <h3>ຕັ້ງຄ່າຮ້ານຄ້າ</h3>
+    <div class="field"><label>ຊື່ຮ້ານ</label><input id="st_shopName"></div>
+    <div class="field"><label>ທີ່ຢູ່ / ເບີໂທ (ສະແດງໃນໃບບິນ)</label><input id="st_address"></div>
+    <div class="field"><label>ສັນຍາລັກສະກຸນເງິນ</label><input id="st_currency" placeholder="₭ / ฿ / $"></div>
+    <div class="field"><label>ຂໍ້ຄວາມທ້າຍໃບບິນ</label><input id="st_footer" placeholder="ຂອບໃຈທີ່ໃຊ້ບໍລິການ"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="settingsModal">ຍົກເລີກ</button>
+      <button class="btn btn-amber btn-block" id="saveSettingsBtn">ບັນທຶກ</button>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:18px 0;">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">☁️ ການເຊື່ອມຕໍ່ Cloud (Google Sheet)</div>
+    <div class="helper-text" style="margin-bottom:10px;">ຂໍ້ມູນທັງໝົດຊິງກັນຜ່ານ Google Sheet ນີ້ ທຸກເຄື່ອງທີ່ໃຊ້ URL ດຽວກັນຈະເຫັນຂໍ້ມູນຮ່ວມກັນ</div>
+    <button class="btn btn-outline btn-block" id="openApiSetupFromSettingsBtn">ປ່ຽນ / ກວດສອບການເຊື່ອມຕໍ່ Cloud</button>
+  </div>
+</div>
+
+<!-- Cloud API Setup Modal -->
+<div class="modal-overlay" id="apiSetupModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="apiSetupModal" id="apiSetupCloseBtn">×</button>
+    <h3>☁️ ເຊື່ອມຕໍ່ Cloud Sync</h3>
+    <div class="helper-text">
+      ລະບົບນີ້ໃຊ້ <b>Google Sheet</b> ເປັນຖານຂໍ້ມູນກາງ ເພື່ອໃຫ້ທຸກເຄື່ອງ/ທຸກ browser ທີ່ເປີດດ້ວຍ URL ດຽວກັນເຫັນຂໍ້ມູນຮ່ວມກັນ.<br><br>
+      ຖ້າຍັງບໍ່ໄດ້ຕັ້ງຄ່າ ໃຫ້ເຮັດຕາມຂັ້ນຕອນທີ່ Claude ອະທິບາຍໄວ້ (ສ້າງ Google Sheet → ເປີດ Apps Script → ວາງໂຄດ → Deploy ເປັນ Web App) ແລ້ວເອົາ URL ທີ່ໄດ້ມາວາງໃສ່ຊ່ອງລຸ່ມນີ້.
+    </div>
+    <div class="field">
+      <label>Web App URL</label>
+      <input id="apiUrlInput" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+    </div>
+    <div class="import-summary" id="apiSetupError" style="display:none;background:var(--danger-bg);color:var(--danger);"></div>
+    <div class="modal-actions">
+      <button class="btn btn-amber btn-block" id="apiSetupSaveBtn">ເຊື່ອມຕໍ່</button>
+    </div>
+  </div>
+</div>
+
+<!-- Staff Picker Modal (who's currently selling) -->
+<div class="modal-overlay" id="staffPickerModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="staffPickerModal" id="staffPickerCloseBtn">×</button>
+    <h3>👤 ເຂົ້າສູ່ລະບົບ</h3>
+    <div class="helper-text" id="staffPickerHint" style="margin-bottom:12px;">ເລືອກຊື່ຂອງທ່ານເພື່ອເຂົ້າໃຊ້ງານ</div>
+    <div id="staffPickerList"></div>
+    <div class="import-summary" id="staffPickerError" style="display:none;background:var(--danger-bg);color:var(--danger);"></div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn btn-outline btn-block" id="manageStaffBtn">ຈັດການພະນັກງານ</button>
+    </div>
+    <button class="btn btn-danger btn-block" id="logoutBtn" style="margin-top:8px;display:none;">ອອກຈາກລະບົບ</button>
+  </div>
+</div>
+
+<!-- Staff Management Modal -->
+<div class="modal-overlay" id="staffManageModal">
+  <div class="modal wide" style="position:relative;">
+    <button class="modal-close" data-close="staffManageModal">×</button>
+    <h3>ຈັດການພະນັກງານ</h3>
+    <div class="table-wrap" style="margin-bottom:14px;">
+      <table>
+        <thead><tr><th>ຊື່</th><th>ລະຫັດ PIN</th><th>ສິດ</th><th></th></tr></thead>
+        <tbody id="staffTableBody"></tbody>
+      </table>
+    </div>
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">ເພີ່ມພະນັກງານໃໝ່</div>
+    <div class="field-row">
+      <div class="field"><label>ຊື່ພະນັກງານ</label><input id="staff_name" placeholder="ຊື່..."></div>
+      <div class="field"><label>PIN (ບໍ່ບັງຄັບ, 4 ໂຕເລກ)</label><input id="staff_pin" maxlength="4" inputmode="numeric" placeholder="ເຊັ່ນ: 1234"></div>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input type="checkbox" id="staff_isManager" style="width:auto;">
+      <label for="staff_isManager" style="margin:0;font-size:13px;font-weight:600;color:var(--ink);">ໃຫ້ສິດເບິ່ງລາຍງານກຳໄລ (ຜູ້ຈັດການ)</label>
+    </div>
+    <button class="btn btn-navy btn-block" id="addStaffBtn">+ ເພີ່ມພະນັກງານ</button>
+  </div>
+</div>
+
+<!-- Promotions List Modal -->
+<div class="modal-overlay" id="promoModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" data-close="promoModal">×</button>
+    <h3>🏷️ ໂປຣໂມຊັນ</h3>
+    <div class="toolbar" style="margin-bottom:10px;">
+      <div class="spacer"></div>
+      <button class="btn btn-navy btn-sm" id="addPromoBtn">+ ເພີ່ມໂປຣໂມຊັນ</button>
+    </div>
+    <div id="promoList" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
+<!-- Promotion Add/Edit Modal -->
+<div class="modal-overlay" id="promoEditModal">
+  <div class="modal" style="position:relative;max-width:360px;">
+    <button class="modal-close" data-close="promoEditModal">×</button>
+    <h3 id="promoEditTitle">ເພີ່ມໂປຣໂມຊັນ</h3>
+    <input type="hidden" id="pe_id">
+    <div class="field"><label>ຊື່ໂປຣໂມຊັນ</label><input id="pe_name" placeholder="ເຊັ່ນ: ຫຼຸດ 10%"></div>
+    <div class="field">
+      <label>ປະເພດ</label>
+      <select id="pe_type">
+        <option value="percent">ສ່ວນຫຼຸດເປັນ % ຂອງຍອດຂາຍ</option>
+        <option value="amount">ຫຼຸດເປັນຈຳນວນເງິນ</option>
+      </select>
+    </div>
+    <div class="field"><label id="pe_value_label">ຈຳນວນ %</label><input id="pe_value" type="number" min="0" step="0.01" value="0"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="promoEditModal">ຍົກເລີກ</button>
+      <button class="btn btn-amber btn-block" id="savePromoBtn">ບັນທຶກ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal wide" style="position:relative;">
+    <button class="modal-close" data-close="importModal">×</button>
+    <h3>ນຳເຂົ້າສິນຄ້າ</h3>
+    <div class="import-tabs">
+      <button class="import-tab-btn active" data-importtab="file">📁 ອັບໂຫລດໄຟລ໌</button>
+      <button class="import-tab-btn" data-importtab="link">🔗 ລິ້ງ Google Sheet</button>
+    </div>
+
+    <div class="import-pane active" id="importPane-file">
+      <div class="helper-text">
+        ຮອງຮັບໄຟລ໌ <b>.csv</b> (ແນະນຳ — ອ່ານໄດ້ໄວແລະໜັກແໜ້ນທີ່ສຸດ), .xlsx, .xls — ຖ້າຂໍ້ມູນຢູ່ໃນ Google Sheet ໃຫ້ໄປທີ່ <b>File → Download → Comma Separated Values (.csv)</b> ແລ້ວອັບໂຫລດໄຟລ໌ນັ້ນຢູ່ບ່ອນນີ້.<br>
+        ຄໍລຳທີ່ຮອງຮັບ (ໃສ່ຫົວຕາຕະລາງແຖວທຳອິດ): <b>ບາໂຄດ, ຊື່ສິນຄ້າ, ໜ່ວຍ, ລາຄາທຶນ, ລາຄາຂາຍ, ຄົງເຫຼືອ</b> (ຫຼືໃຊ້ຄຳວ່າ barcode, name, unit, cost, price, stock ກໍໄດ້) — ຕ້ອງມີຢ່າງໜ້ອຍຄໍລຳ "ຊື່ສິນຄ້າ"
+      </div>
+      <div class="drop-zone" id="dropZone">
+        ກົດເພື່ອເລືອກໄຟລ໌ ຫຼື ລາກໄຟລ໌ມາວາງທີ່ນີ້
+        <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
+      </div>
+    </div>
+
+    <div class="import-pane" id="importPane-link">
+      <div class="helper-text">
+        ໃນ Google Sheet: <b>File → Share → Publish to web</b> → ເລືອກຊີດ → ຮູບແບບ <b>CSV</b> → ກົດ Publish ແລ້ວກັອບປີ້ລິ້ງມາວາງທີ່ນີ້.<br>
+        ໝາຍເຫດ: ບາງ Google Sheet ອາດຈະບໍ່ອະນຸຍາດໃຫ້ດຶງຂໍ້ມູນຜ່ານລິ້ງໂດຍກົງ ຖ້າດຶງບໍ່ໄດ້ ໃຫ້ໃຊ້ວິທີອັບໂຫລດໄຟລ໌ແທນ.
+      </div>
+      <div class="field">
+        <label>ລິ້ງ CSV ທີ່ເຜີຍແຜ່ແລ້ວ</label>
+        <input id="importLinkInput" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+      </div>
+      <button class="btn btn-navy btn-block" id="importLinkBtn">ດຶງຂໍ້ມູນຈາກລິ້ງ</button>
+    </div>
+
+    <div class="import-summary" id="importSummary"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="importModal">ປິດ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Camera Barcode Scan Modal -->
+<div class="modal-overlay" id="cameraScanModal">
+  <div class="modal" style="position:relative;max-width:420px;">
+    <button class="modal-close" data-close="cameraScanModal">×</button>
+    <h3>📷 ສະແກນບາໂຄດ</h3>
+    <div id="cameraScanStatus" style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">ກຳລັງເປີດກ້ອງ...</div>
+    <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3;">
+      <video id="cameraVideo" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+      <div style="position:absolute;inset:15%;border:3px solid rgba(232,163,61,.85);border-radius:8px;pointer-events:none;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-block" data-close="cameraScanModal">ປິດກ້ອງ</button>
+    </div>
+  </div>
+</div>
+
+<div id="receiptPrintArea"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  let products = [];
+  let sales = [];
+  let promotions = [];
+  let movements = [];
+  let staff = [];
+  let currentStaffName = ''; // '' = not logged in / anonymous (guest)
+  let currentAuthRole = 'guest'; // 'guest' | 'staff' | 'manager' — set by the server on every load/login
+  let settings = { shopName:"ຮ້ານຄ້າຂອງຂ້ອຍ", address:"", currency:"₭", footer:"ຂອບໃຈທີ່ໃຊ້ບໍລິການ" };
+  let cart = []; // {lineKey, productId, variantId, name, price, qty}
+  let receiptCounter = 1;
+
+  // Pre-configured Apps Script Web App URL — every device opening this file
+  // uses this by default, so no per-device setup is needed. A device can
+  // still override it via Settings → "ປ່ຽນ / ກວດສອບການເຊື່ອມຕໍ່ Cloud".
+  const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwqcxbMMjff4bDOvpJQK_F9aqck1wGDMIky1O66N-_vHx3Lq9vvxMg3gRpPBSa676Bu/exec';
+  let API_URL = localStorage.getItem('pos_cloud_api_url') || DEFAULT_API_URL;
+
+  // The logged-in session — sent with every request so the server can verify
+  // who's asking and decide what data (e.g. real cost figures) to include.
+  const SESSION_KEY = 'pos_cloud_session';
+  function getSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); }catch(e){ return null; } }
+  function setSession(staffId, pin){ localStorage.setItem(SESSION_KEY, JSON.stringify({staffId, pin: pin||''})); }
+  function clearSession(){ localStorage.removeItem(SESSION_KEY); }
+
+  const $ = (id)=>document.getElementById(id);
+  const fmt = (n)=> (Math.round((n+Number.EPSILON)*100)/100).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+
+  function toast(msg){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2600);
+  }
+
+  function uid(){ return 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  // ---------- Cloud API (Google Apps Script + Google Sheet as the database) ----------
+  // Every call attaches the current session's staffId/pin so the server can
+  // authenticate the request itself — this isn't just a client-side check.
+  async function apiCall(action, method, data){
+    if(!API_URL) throw new Error('no-api-url');
+    const session = getSession();
+    let url = API_URL;
+    const opts = { method };
+    if(method === 'GET'){
+      const params = new URLSearchParams();
+      params.set('action', action);
+      if(session && session.staffId){ params.set('staffId', session.staffId); params.set('pin', session.pin||''); }
+      url += (API_URL.includes('?') ? '&' : '?') + params.toString();
+    } else {
+      // text/plain avoids a CORS preflight against Apps Script Web Apps
+      opts.headers = {'Content-Type':'text/plain;charset=utf-8'};
+      const body = { action, data };
+      if(session && session.staffId){ body.staffId = session.staffId; body.pin = session.pin||''; }
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(url, opts);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if(json && json.error) throw new Error(json.error);
+    return json;
+  }
+
+  // GET with EXPLICIT credentials (used for login attempts, before they're
+  // saved as the active session — apiCall() above always uses the stored one).
+  async function fetchAllAs(staffId, pin){
+    if(!API_URL) throw new Error('no-api-url');
+    const params = new URLSearchParams();
+    params.set('action', 'getAll');
+    if(staffId){ params.set('staffId', staffId); params.set('pin', pin||''); }
+    const url = API_URL + (API_URL.includes('?') ? '&' : '?') + params.toString();
+    const res = await fetch(url, { method:'GET' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if(json && json.error) throw new Error(json.error);
+    return json;
+  }
+
+  function applyLoadedData(res){
+    products = res.products || [];
+    sales = (res.sales || []).slice().reverse(); // newest first, matches how sales are displayed
+    promotions = res.promotions || [];
+    movements = (res.movements || []).slice().reverse();
+    staff = res.staff || [];
+    settings = Object.assign(settings, res.settings || {});
+    receiptCounter = res.counter || 1;
+    const auth = res.auth || { ok:true, role:'guest' };
+    currentAuthRole = auth.role || 'guest';
+    currentStaffName = auth.staffName || '';
+    return auth;
+  }
+
+  // ---------- Storage ----------
+  // Loads using whatever session is currently stored (or none, for the very
+  // first anonymous/bootstrap check).
+  async function loadAll(){
+    const res = await apiCall('getAll', 'GET');
+    return applyLoadedData(res);
+  }
+  // Attempts a login with specific credentials, WITHOUT touching the stored
+  // session — caller decides whether to keep it based on the returned auth.ok.
+  async function loadAllAs(staffId, pin){
+    const res = await fetchAllAs(staffId, pin);
+    return applyLoadedData(res);
+  }
+  async function saveProducts(){
+    try{ await apiCall('saveProducts', 'POST', products); }
+    catch(e){ toast('ບັນທຶກສິນຄ້າຂຶ້ນຄລາວບໍ່ສຳເລັດ — ກວດສອບການເຊື່ອມຕໍ່ອິນເຕີເນັດ'); }
+  }
+  async function appendSaleRemote(sale){
+    try{ await apiCall('appendSale', 'POST', sale); }
+    catch(e){ toast('ບັນທຶກການຂາຍຂຶ້ນຄລາວບໍ່ສຳເລັດ — ຂໍ້ມູນອາດບໍ່ຊິງກັບເຄື່ອງອື່ນ'); }
+  }
+  async function updateSaleRemote(sale){
+    try{ await apiCall('updateSale', 'POST', sale); }
+    catch(e){ toast('ອັບເດດບິນຂຶ້ນຄລາວບໍ່ສຳເລັດ — ຂໍ້ມູນອາດບໍ່ຊິງກັບເຄື່ອງອື່ນ'); }
+  }
+  async function savePromotions(){
+    try{ await apiCall('savePromotions', 'POST', promotions); }
+    catch(e){ toast('ບັນທຶກໂປຣໂມຊັນຂຶ້ນຄລາວບໍ່ສຳເລັດ'); }
+  }
+  async function appendMovementRemote(m){
+    try{ await apiCall('appendMovement', 'POST', m); }
+    catch(e){ toast('ບັນທຶກລາຍການຂຶ້ນຄລາວບໍ່ສຳເລັດ — ຂໍ້ມູນອາດບໍ່ຊິງກັບເຄື່ອງອື່ນ'); }
+  }
+  async function updateMovementRemote(m){
+    try{ await apiCall('updateMovement', 'POST', m); }
+    catch(e){ toast('ອັບເດດລາຍການຂຶ້ນຄລາວບໍ່ສຳເລັດ — ຂໍ້ມູນອາດບໍ່ຊິງກັບເຄື່ອງອື່ນ'); }
+  }
+  async function saveStaff(){
+    try{ await apiCall('saveStaff', 'POST', staff); }
+    catch(e){ toast('ບັນທຶກຂໍ້ມູນພະນັກງານຂຶ້ນຄລາວບໍ່ສຳເລັດ'); }
+  }
+  async function saveSettings(){
+    try{ await apiCall('saveSettings', 'POST', settings); }
+    catch(e){ toast('ບັນທຶກການຕັ້ງຄ່າຂຶ້ນຄລາວບໍ່ສຳເລັດ'); }
+  }
+  async function saveCounter(){
+    try{ await apiCall('saveCounter', 'POST', receiptCounter); }
+    catch(e){}
+  }
+
+  // ---------- Variant helpers ----------
+  // Returns a uniform handle onto whatever actually owns price/stock/name —
+  // either the base product (no variant) or one specific variant.
+  function stockOwner(productId, variantId){
+    const p = products.find(x=>x.id===productId);
+    if(!p) return null;
+    if(variantId){
+      const v = (p.variants||[]).find(v=>v.id===variantId);
+      if(!v) return null;
+      return { product:p, variant:v, stock:v.stock, price:v.price, name:p.name+' - '+v.name,
+        setStock:(n)=>{ v.stock = n; } };
+    }
+    return { product:p, variant:null, stock:p.stock, price:p.price, name:p.name,
+      setStock:(n)=>{ p.stock = n; } };
+  }
+  function productTotalStock(p){
+    if(p.variants && p.variants.length) return p.variants.reduce((a,v)=>a+(v.stock||0), 0);
+    return p.stock||0;
+  }
+  function productDisplayPrice(p){
+    if(p.variants && p.variants.length){
+      const prices = p.variants.map(v=>v.price||0);
+      const lo = Math.min(...prices), hi = Math.max(...prices);
+      return lo===hi ? fmt(lo) : `${fmt(lo)}-${fmt(hi)}`;
+    }
+    return fmt(p.price);
+  }
+  // Unit cost for profit calculations — uses the variant's own cost if it has
+  // one set, otherwise falls back to the base product's cost.
+  function getItemCost(productId, variantId){
+    const p = products.find(x=>x.id===productId);
+    if(!p) return 0;
+    if(variantId){
+      const v = (p.variants||[]).find(v=>v.id===variantId);
+      if(v && v.cost) return v.cost;
+    }
+    return p.cost||0;
+  }
+
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      $('panel-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'pos'){ renderProductGrid(); focusScan(); }
+      if(btn.dataset.tab === 'stock'){ renderStockTable(); }
+      if(btn.dataset.tab === 'movements'){ renderMovementTable(); }
+      if(btn.dataset.tab === 'history'){ renderHistoryTable(); }
+    });
+  });
+
+  function focusScan(){ setTimeout(()=>$('scanInput').focus(), 30); }
+
+  // ---------- Modals ----------
+  function openModal(id){ $(id).classList.add('show'); }
+  function closeModal(id){
+    $(id).classList.remove('show');
+    if(id === 'cameraScanModal') stopCameraScan();
+  }
+  document.querySelectorAll('[data-close]').forEach(el=>{
+    el.addEventListener('click', ()=>{ closeModal(el.dataset.close); if(el.dataset.close!=='receiptModal') focusScan(); });
+  });
+  document.querySelectorAll('.modal-overlay').forEach(ov=>{
+    ov.addEventListener('click', (e)=>{
+      if(e.target!==ov) return;
+      if(ov.id==='apiSetupModal' && ov.dataset.force==='1') return; // must configure the API first
+      if(ov.id==='staffPickerModal' && ov.dataset.force==='1') return; // must log in first
+      closeModal(ov.id);
+    });
+  });
+
+  // ---------- POS: product grid ----------
+  function renderProductGrid(filter){
+    filter = (filter||'').trim().toLowerCase();
+    const grid = $('productGrid');
+    let list = products;
+    if(filter){
+      list = products.filter(p=> p.name.toLowerCase().includes(filter) || (p.barcode||'').toLowerCase().includes(filter) ||
+        (p.variants||[]).some(v=> (v.barcode||'').toLowerCase().includes(filter)));
+    }
+    if(list.length===0){
+      grid.innerHTML = '<div class="empty-state">ບໍ່ພົບສິນຄ້າ — ເພີ່ມສິນຄ້າໄດ້ທີ່ແທັບ "ຄັງສິນຄ້າ"</div>';
+      return;
+    }
+    grid.innerHTML = list.map(p=>{
+      const hasVariants = p.variants && p.variants.length>0;
+      const totalStock = productTotalStock(p);
+      const low = totalStock <= 5;
+      const out = totalStock <= 0;
+      const thumb = p.image ? `<img class="p-thumb" src="${p.image}" alt="">` : `<div class="p-thumb-placeholder">📦</div>`;
+      return `<button class="product-card" data-id="${p.id}" ${out?'disabled':''}>
+        ${thumb}
+        <div class="p-name">${escapeHtml(p.name)}${hasVariants?` <span style="color:var(--muted);font-weight:400;">(${p.variants.length} ຕົວເລືອກ)</span>`:''}</div>
+        <div class="p-price">${settings.currency}${productDisplayPrice(p)}</div>
+        <div class="p-stock ${low?'low':''}">ຄົງເຫຼືອ ${totalStock} ${escapeHtml(p.unit||'')}</div>
+      </button>`;
+    }).join('');
+    grid.querySelectorAll('.product-card').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const p = products.find(x=>x.id===btn.dataset.id);
+        if(!p) return;
+        if(p.variants && p.variants.length>0){ openVariantPick(p.id); }
+        else { addToCart(p.id, null, 1); }
+      });
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ---------- Variant picker (POS) ----------
+  function openVariantPick(productId, onPick){
+    const p = products.find(x=>x.id===productId);
+    if(!p) return;
+    $('variantPickTitle').textContent = p.name + ' — ເລືອກຕົວເລືອກ';
+    $('variantPickList').innerHTML = p.variants.map(v=>{
+      const out = (v.stock||0) <= 0;
+      return `<button class="pick-row" data-vid="${v.id}" ${out?'disabled':''}>
+        <span class="pr-name">${escapeHtml(v.name)}</span>
+        <span class="pr-stock">ຄົງເຫຼືອ ${v.stock||0}</span>
+        <span class="pr-price">${settings.currency}${fmt(v.price)}</span>
+      </button>`;
+    }).join('');
+    $('variantPickList').querySelectorAll('.pick-row').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(onPick){ onPick(productId, btn.dataset.vid); }
+        else { addToCart(productId, btn.dataset.vid, 1); }
+        closeModal('variantPickModal');
+      });
+    });
+    openModal('variantPickModal');
+  }
+
+  // ---------- Cart ----------
+  function lineKey(productId, variantId){ return productId + '::' + (variantId||'base'); }
+
+  function addToCart(productId, variantId, qty){
+    const owner = stockOwner(productId, variantId);
+    if(!owner) return;
+    const key = lineKey(productId, variantId);
+    const inCartQty = cart.filter(c=>c.key===key).reduce((a,c)=>a+c.qty,0);
+    if(inCartQty + qty > owner.stock){
+      toast(`ສິນຄ້າຄົງເຫຼືອບໍ່ພໍ (ຄົງເຫຼືອ ${owner.stock})`);
+      return;
+    }
+    const existing = cart.find(c=>c.key===key);
+    if(existing){ existing.qty += qty; }
+    else { cart.push({key, productId, variantId:variantId||null, name:owner.name, price:owner.price, qty}); }
+    renderCart();
+  }
+
+  function changeQty(key, delta){
+    const item = cart.find(c=>c.key===key);
+    if(!item) return;
+    const owner = stockOwner(item.productId, item.variantId);
+    const newQty = item.qty + delta;
+    if(newQty <= 0){ cart = cart.filter(c=>c.key!==key); }
+    else if(owner && newQty > owner.stock){ toast(`ສິນຄ້າຄົງເຫຼືອບໍ່ພໍ (ຄົງເຫຼືອ ${owner.stock})`); return; }
+    else { item.qty = newQty; }
+    renderCart();
+  }
+
+  function removeFromCart(key){
+    cart = cart.filter(c=>c.key!==key);
+    renderCart();
+  }
+
+  function cartSubtotal(){ return cart.reduce((a,c)=>a + c.price*c.qty, 0); }
+  function cartTotal(){
+    const discount = Number($('discountInput').value)||0;
+    return Math.max(0, cartSubtotal() - discount);
+  }
+
+  function renderCart(){
+    const list = $('cartList');
+    if(cart.length===0){
+      list.innerHTML = '<div class="empty-state" style="padding:20px 6px;">ຍັງບໍ່ມີສິນຄ້າໃນກະຕ່າ</div>';
+    } else {
+      list.innerHTML = cart.map(c=>`
+        <div class="cart-item" data-key="${c.key}">
+          <div class="ci-info">
+            <div class="ci-name">${escapeHtml(c.name)}</div>
+            <div class="ci-price">${settings.currency}${fmt(c.price)}</div>
+          </div>
+          <div class="qty-stepper">
+            <button class="qty-btn minus">−</button>
+            <div class="qty-val">${c.qty}</div>
+            <button class="qty-btn plus">+</button>
+          </div>
+          <div class="ci-total">${fmt(c.price*c.qty)}</div>
+          <button class="ci-remove">✕</button>
+        </div>`).join('');
+      list.querySelectorAll('.cart-item').forEach(row=>{
+        const key = row.dataset.key;
+        row.querySelector('.plus').addEventListener('click', ()=>changeQty(key, 1));
+        row.querySelector('.minus').addEventListener('click', ()=>changeQty(key, -1));
+        row.querySelector('.ci-remove').addEventListener('click', ()=>removeFromCart(key));
+      });
+    }
+    $('sumCount').textContent = cart.reduce((a,c)=>a+c.qty,0);
+    $('sumTotal').textContent = settings.currency + fmt(cartTotal());
+    $('checkoutBtn').disabled = cart.length===0;
+  }
+  $('discountInput').addEventListener('input', renderCart);
+  $('clearCartBtn').addEventListener('click', ()=>{ cart=[]; $('promoSelect').value=''; $('discountInput').value=0; renderCart(); });
+
+  // ---------- Scan / search input ----------
+  const scanInput = $('scanInput');
+  scanInput.addEventListener('input', (e)=> renderProductGrid(e.target.value));
+  scanInput.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    const val = scanInput.value.trim();
+    if(!val) return;
+    const valLower = val.toLowerCase();
+
+    // exact match: base product barcode
+    const exactProduct = products.find(p=> p.barcode && p.barcode.toLowerCase() === valLower);
+    if(exactProduct && !(exactProduct.variants && exactProduct.variants.length)){
+      addToCart(exactProduct.id, null, 1);
+      scanInput.value=''; renderProductGrid('');
+      return;
+    }
+    // exact match: a variant's own barcode
+    for(const p of products){
+      const v = (p.variants||[]).find(v=> v.barcode && v.barcode.toLowerCase() === valLower);
+      if(v){
+        addToCart(p.id, v.id, 1);
+        scanInput.value=''; renderProductGrid('');
+        return;
+      }
+    }
+    // product with variants matched by barcode but no single variant barcode set -> open picker
+    if(exactProduct && exactProduct.variants && exactProduct.variants.length){
+      openVariantPick(exactProduct.id);
+      scanInput.value=''; renderProductGrid('');
+      return;
+    }
+
+    const filtered = products.filter(p=> p.name.toLowerCase().includes(valLower) || (p.barcode||'').toLowerCase().includes(valLower));
+    if(filtered.length===1){
+      const p = filtered[0];
+      if(p.variants && p.variants.length){ openVariantPick(p.id); }
+      else { addToCart(p.id, null, 1); }
+      scanInput.value=''; renderProductGrid('');
+    } else if(filtered.length===0){
+      toast('ບໍ່ພົບສິນຄ້າລະຫັດນີ້');
+    }
+  });
+
+  // ---------- Camera barcode scan ----------
+  let cameraStream = null;
+  let cameraScanRAF = null;
+  let barcodeDetector = null;
+
+  function stopCameraScan(){
+    if(cameraScanRAF){ cancelAnimationFrame(cameraScanRAF); cameraScanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    const video = $('cameraVideo');
+    if(video) video.srcObject = null;
+  }
+
+  function handleCameraScanResult(value){
+    stopCameraScan();
+    closeModal('cameraScanModal');
+    if(navigator.vibrate) navigator.vibrate(80);
+    scanInput.value = value;
+    scanInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+  }
+
+  $('cameraScanBtn').addEventListener('click', async ()=>{
+    openModal('cameraScanModal');
+    $('cameraScanStatus').textContent = 'ກຳລັງເປີດກ້ອງ...';
+
+    if(!('BarcodeDetector' in window)){
+      $('cameraScanStatus').textContent = '⚠️ ອຸປະກອນ/ບຣາວເຊີນີ້ບໍ່ຮອງຮັບການສະແກນດ້ວຍກ້ອງ — ລອງໃຊ້ Chrome ໃນ Android ຫຼືໃຊ້ເຄື່ອງຍິງບາໂຄດແທນ';
+      return;
+    }
+    try{
+      barcodeDetector = new BarcodeDetector({
+        formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','code_93','codabar','itf','qr_code']
+      });
+    }catch(e){
+      try{ barcodeDetector = new BarcodeDetector(); }
+      catch(e2){ $('cameraScanStatus').textContent = '⚠️ ບໍ່ສາມາດເປີດການສະແກນດ້ວຍກ້ອງໄດ້'; return; }
+    }
+    try{
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    }catch(e){
+      $('cameraScanStatus').textContent = '⚠️ ບໍ່ໄດ້ຮັບອະນຸຍາດໃຊ້ກ້ອງ ຫຼືບໍ່ພົບກ້ອງ — ກະລຸນາອະນຸຍາດການໃຊ້ກ້ອງໃນ browser';
+      return;
+    }
+    const video = $('cameraVideo');
+    video.srcObject = cameraStream;
+    try{ await video.play(); }catch(e){}
+    $('cameraScanStatus').textContent = 'ວາງບາໂຄດໃຫ້ຢູ່ໃນກອບ...';
+
+    let lastValue = '';
+    let lastTime = 0;
+    const scanLoop = async ()=>{
+      if(!cameraStream) return;
+      try{
+        const codes = await barcodeDetector.detect(video);
+        if(codes && codes.length){
+          const value = codes[0].rawValue;
+          const now = Date.now();
+          if(value && (value !== lastValue || now - lastTime > 1500)){
+            lastValue = value; lastTime = now;
+            handleCameraScanResult(value);
+            return;
+          }
+        }
+      }catch(err){ /* ignore per-frame detection errors */ }
+      cameraScanRAF = requestAnimationFrame(scanLoop);
+    };
+    cameraScanRAF = requestAnimationFrame(scanLoop);
+  });
+
+  // ---------- Checkout ----------
+  const PAY_METHOD_LABELS = { cash:'ເງິນສົດ', transfer:'ໂອນ', card:'ບັດ', credit:'ຄ້າງຈ່າຍ' };
+
+  document.querySelectorAll('.pay-method-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      $('co_paymethod').value = btn.dataset.pay;
+      const isCredit = btn.dataset.pay === 'credit';
+      $('co_received_field').style.display = isCredit ? 'none' : '';
+      $('co_change_row').style.display = isCredit ? 'none' : '';
+    });
+  });
+
+  $('checkoutBtn').addEventListener('click', ()=>{
+    if(cart.length===0) return;
+    $('co_total').textContent = settings.currency + fmt(cartTotal());
+    $('co_received').value = '';
+    $('co_change').textContent = settings.currency + '0';
+    $('co_customer').value = '';
+    document.querySelectorAll('.pay-method-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelector('.pay-method-btn[data-pay="cash"]').classList.add('active');
+    $('co_paymethod').value = 'cash';
+    $('co_received_field').style.display = '';
+    $('co_change_row').style.display = '';
+    openModal('checkoutModal');
+    setTimeout(()=>$('co_received').focus(), 50);
+  });
+  $('co_received').addEventListener('input', ()=>{
+    const received = Number($('co_received').value)||0;
+    const change = received - cartTotal();
+    $('co_change').textContent = settings.currency + fmt(change>0?change:0);
+  });
+
+  $('confirmCheckoutBtn').addEventListener('click', async ()=>{
+    const total = cartTotal();
+    const payMethod = $('co_paymethod').value || 'cash';
+    const received = payMethod==='credit' ? 0 : (Number($('co_received').value)||0);
+    if(payMethod!=='credit' && received < total){ toast('ຮັບເງິນບໍ່ພໍກັບຍອດທີ່ຕ້ອງຊຳລະ'); return; }
+
+    // deduct stock (from the specific variant if the line has one, else the base product)
+    for(const item of cart){
+      const owner = stockOwner(item.productId, item.variantId);
+      if(owner) owner.setStock(Math.max(0, owner.stock - item.qty));
+    }
+    const sale = {
+      id: uid(),
+      receiptNo: 'R' + String(receiptCounter).padStart(5,'0'),
+      datetime: new Date().toISOString(),
+      customerName: $('co_customer').value.trim(),
+      paymentMethod: payMethod,
+      staffName: currentStaffName,
+      promoName: $('promoSelect').selectedOptions[0] ? $('promoSelect').selectedOptions[0].textContent : '',
+      items: cart.map(c=>({productId:c.productId, variantId:c.variantId, name:c.name, price:c.price, cost:getItemCost(c.productId, c.variantId), qty:c.qty, total:c.price*c.qty})),
+      subtotal: cartSubtotal(),
+      discount: Number($('discountInput').value)||0,
+      total: total,
+      received: received,
+      change: payMethod==='credit' ? 0 : received-total,
+      cancelled: false,
+      cancelledAt: null
+    };
+    receiptCounter += 1;
+    sales.unshift(sale);
+    await Promise.all([saveProducts(), appendSaleRemote(sale), saveCounter()]);
+
+    cart = [];
+    $('discountInput').value = 0;
+    $('promoSelect').value = '';
+    renderCart();
+    renderProductGrid();
+    closeModal('checkoutModal');
+    showReceipt(sale);
+    toast('ບັນທຶກການຂາຍສຳເລັດ');
+  });
+
+  // ---------- Receipt ----------
+  function receiptHtml(sale){
+    const dt = new Date(sale.datetime);
+    const dtStr = dt.toLocaleDateString('lo-LA') + ' ' + dt.toLocaleTimeString('lo-LA',{hour:'2-digit',minute:'2-digit'});
+    let itemsHtml = sale.items.map(it=>`
+      <div class="rline"><span class="ritem-name">${escapeHtml(it.name)}</span></div>
+      <div class="rline"><span>${it.qty} x ${fmt(it.price)}</span><span>${fmt(it.total)}</span></div>
+    `).join('');
+    const payLabel = PAY_METHOD_LABELS[sale.paymentMethod] || 'ເງິນສົດ';
+    return `
+      ${sale.cancelled? `<div class="center" style="color:var(--danger);font-weight:800;border:2px solid var(--danger);border-radius:6px;padding:4px;margin-bottom:8px;">⚠️ ບິນນີ້ຖືກຍົກເລີກແລ້ວ</div>`:''}
+      <div class="shop">${escapeHtml(settings.shopName)}</div>
+      ${settings.address? `<div class="sub">${escapeHtml(settings.address)}</div>`:''}
+      <hr>
+      <div class="rline"><span>ເລກທີ່: ${sale.receiptNo}</span></div>
+      <div class="rline"><span>${dtStr}</span></div>
+      ${sale.customerName? `<div class="rline"><span>ລູກຄ້າ: ${escapeHtml(sale.customerName)}</span></div>`:''}
+      ${sale.staffName? `<div class="rline"><span>ພະນັກງານ: ${escapeHtml(sale.staffName)}</span></div>`:''}
+      ${sale.staffName? `<div class="rline"><span>ພະນັກງານຂາຍ: ${escapeHtml(sale.staffName)}</span></div>`:''}
+      <hr>
+      ${itemsHtml}
+      <hr>
+      <div class="rline"><span>ລວມ</span><span>${settings.currency}${fmt(sale.subtotal)}</span></div>
+      ${sale.discount>0? `<div class="rline"><span>ສ່ວນຫຼຸດ${sale.promoName?' ('+escapeHtml(sale.promoName)+')':''}</span><span>-${settings.currency}${fmt(sale.discount)}</span></div>`:''}
+      <div class="rline" style="font-weight:800;font-size:14px;"><span>ສຸດທິ</span><span>${settings.currency}${fmt(sale.total)}</span></div>
+      <div class="rline"><span>ວິທີຊຳລະ</span><span>${escapeHtml(payLabel)}</span></div>
+      ${sale.paymentMethod==='credit'
+        ? `<div class="rline" style="font-weight:800;color:#B8860B;"><span>ສະຖານະ</span><span>ຄ້າງຈ່າຍ</span></div>`
+        : `<div class="rline"><span>ຮັບເງິນ</span><span>${settings.currency}${fmt(sale.received)}</span></div>
+      <div class="rline"><span>ເງິນທອນ</span><span>${settings.currency}${fmt(sale.change)}</span></div>`}
+      <hr>
+      <div class="center">${escapeHtml(settings.footer)}</div>
+    `;
+  }
+
+  let currentReceiptSale = null;
+  function showReceipt(sale){
+    currentReceiptSale = sale;
+    $('receiptPreview').innerHTML = receiptHtml(sale);
+    $('cancelSaleBtn').style.display = sale.cancelled ? 'none' : '';
+    $('editSaleBtn').style.display = sale.cancelled ? 'none' : '';
+    openModal('receiptModal');
+  }
+
+  function restoreStockForSale(sale){
+    sale.items.forEach(it=>{
+      const owner = stockOwner(it.productId, it.variantId);
+      if(owner) owner.setStock(owner.stock + it.qty);
+    });
+  }
+
+  async function cancelSale(id){
+    const sale = sales.find(s=>s.id===id);
+    if(!sale || sale.cancelled) return;
+    if(!confirm('ຕ້ອງການຍົກເລີກບິນນີ້ບໍ? ສະຕັອກຈະຖືກຄືນໃຫ້ອັດຕະໂນມັດ')) return;
+    restoreStockForSale(sale);
+    sale.cancelled = true;
+    sale.cancelledAt = new Date().toISOString();
+    await Promise.all([saveProducts(), updateSaleRemote(sale)]);
+    renderProductGrid();
+    renderStockTable();
+    renderHistoryTable();
+    if(currentReceiptSale && currentReceiptSale.id===id) showReceipt(sale);
+    toast('ຍົກເລີກບິນສຳເລັດ ຄືນສະຕັອກແລ້ວ');
+  }
+
+  async function editSale(id){
+    const sale = sales.find(s=>s.id===id);
+    if(!sale) return;
+    if(!confirm('ການແກ້ໄຂຈະຍົກເລີກບິນເດີມ (ຄືນສະຕັອກ) ແລ້ວນຳລາຍການເກົ່າໄປໃສ່ກະຕ່າໃຫ້ແກ້ໄຂ ແລະຂາຍໃໝ່ອີກຄັ້ງ ຕ້ອງການດຳເນີນການບໍ?')) return;
+    if(!sale.cancelled){
+      restoreStockForSale(sale);
+      sale.cancelled = true;
+      sale.cancelledAt = new Date().toISOString();
+      await Promise.all([saveProducts(), updateSaleRemote(sale)]);
+    }
+    cart = [];
+    let skipped = 0;
+    sale.items.forEach(it=>{
+      const owner = stockOwner(it.productId, it.variantId);
+      const qty = owner ? Math.min(it.qty, owner.stock) : 0;
+      if(!owner || qty<=0){ skipped++; return; }
+      cart.push({ key: lineKey(it.productId, it.variantId), productId: it.productId, variantId: it.variantId||null, name: owner.name, price: owner.price, qty });
+    });
+    renderCart();
+    renderProductGrid();
+    renderStockTable();
+    renderHistoryTable();
+    closeModal('receiptModal');
+    const posTabBtn = document.querySelector('.tab-btn[data-tab="pos"]');
+    if(posTabBtn) posTabBtn.click();
+    toast(skipped>0
+      ? `ຍົກເລີກບິນເດີມແລ້ວ ນຳ ${sale.items.length-skipped} ລາຍການລົງກະຕ່າ (${skipped} ລາຍການນຳລົງບໍ່ໄດ້)`
+      : 'ຍົກເລີກບິນເດີມແລ້ວ ນຳລາຍການລົງກະຕ່າ — ແກ້ໄຂຕາມຕ້ອງການແລ້ວກົດຊຳລະເງິນ');
+  }
+
+  $('cancelSaleBtn').addEventListener('click', ()=>{ if(currentReceiptSale) cancelSale(currentReceiptSale.id); });
+  $('editSaleBtn').addEventListener('click', ()=>{ if(currentReceiptSale) editSale(currentReceiptSale.id); });
+
+  $('printReceiptBtn').addEventListener('click', ()=>{
+    if(!currentReceiptSale) return;
+    $('receiptPrintArea').innerHTML = receiptHtml(currentReceiptSale);
+    window.print();
+  });
+
+  // ---------- Stock tab ----------
+  function renderStockStats(){
+    const total = products.length;
+    const low = products.filter(p=>{ const s=productTotalStock(p); return s<=5 && s>0; }).length;
+    const out = products.filter(p=>productTotalStock(p)<=0).length;
+    const value = products.reduce((a,p)=>{
+      if(p.variants && p.variants.length) return a + p.variants.reduce((s,v)=>s+(v.stock||0)*(p.cost||0),0);
+      return a + p.stock*p.cost;
+    },0);
+    $('stockStats').innerHTML = `
+      <div class="stat"><div class="label">ສິນຄ້າທັງໝົດ</div><div class="value">${total}</div></div>
+      <div class="stat"><div class="label">ສະຕັອກຕ່ຳ</div><div class="value" style="color:var(--danger)">${low}</div></div>
+      <div class="stat"><div class="label">ສິນຄ້າໝົດ</div><div class="value" style="color:var(--danger)">${out}</div></div>
+      <div class="stat"><div class="label">ມູນຄ່າສະຕັອກ (ທຶນ)</div><div class="value">${settings.currency}${fmt(value)}</div></div>
+    `;
+  }
+
+  function renderStockTable(filter){
+    renderStockStats();
+    filter = (filter||$('stockSearch').value||'').trim().toLowerCase();
+    const tbody = $('stockTableBody');
+    let list = products;
+    if(filter) list = products.filter(p=>p.name.toLowerCase().includes(filter) || (p.barcode||'').toLowerCase().includes(filter));
+    if(list.length===0){
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-state">ຍັງບໍ່ມີສິນຄ້າ — ກົດ "ເພີ່ມສິນຄ້າ" ຫຼື "ນຳເຂົ້າ" ເພື່ອເລີ່ມຕົ້ນ</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(p=>{
+      const hasVariants = p.variants && p.variants.length>0;
+      const totalStock = productTotalStock(p);
+      const low = totalStock<=5;
+      const thumb = p.image ? `<img class="row-thumb" src="${p.image}" alt="">` : `<div class="row-thumb-placeholder">📦</div>`;
+      const nameCell = hasVariants ? `${escapeHtml(p.name)} <span style="color:var(--muted);font-size:11.5px;">(${p.variants.length} ຕົວເລືອກ)</span>` : escapeHtml(p.name);
+      const priceCell = hasVariants ? productDisplayPrice(p) : fmt(p.price);
+      const barcodeCell = hasVariants ? '-' : escapeHtml(p.barcode||'-');
+      return `<tr class="${low?'low-stock':''}" data-id="${p.id}">
+        <td>${thumb}</td>
+        <td class="mono">${barcodeCell}</td>
+        <td>${nameCell}</td>
+        <td>${escapeHtml(p.unit||'-')}</td>
+        <td class="mono">${fmt(p.cost)}</td>
+        <td class="mono">${priceCell}</td>
+        <td class="mono">${totalStock}</td>
+        <td>${totalStock<=0?'<span class="badge low">ໝົດ</span>':low?'<span class="badge low">ຕ່ຳ</span>':'<span class="badge ok">ປົກກະຕິ</span>'}</td>
+        <td class="row-actions">
+          <button class="btn btn-outline btn-sm adj-btn">±ສະຕັອກ</button>
+          <button class="btn btn-outline btn-sm edit-btn">ແກ້ໄຂ</button>
+          <button class="btn btn-danger btn-sm del-btn">ລຶບ</button>
+        </td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      const id = tr.dataset.id;
+      tr.querySelector('.adj-btn').addEventListener('click', ()=>openAdjustModal(id));
+      tr.querySelector('.edit-btn').addEventListener('click', ()=>openProductModal(id));
+      tr.querySelector('.del-btn').addEventListener('click', ()=>deleteProduct(id));
+    });
+  }
+  $('stockSearch').addEventListener('input', (e)=>renderStockTable(e.target.value));
+
+  function setImagePreview(dataUrl){
+    const preview = $('pf_image_preview');
+    if(dataUrl){
+      preview.innerHTML = `<img src="${dataUrl}" alt="">`;
+      $('pf_image_remove').style.display = '';
+    } else {
+      preview.innerHTML = '📦';
+      $('pf_image_remove').style.display = 'none';
+    }
+    $('pf_image').value = dataUrl || '';
+  }
+
+  // Resize/compress an image file down to a small thumbnail data URL.
+  // Kept deliberately small here because each product's image is stored in a
+  // single Google Sheets cell, which has roughly a 50,000-character limit.
+  function resizeImageFile(file, maxDim){
+    maxDim = maxDim || 160;
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        const img = new Image();
+        img.onload = ()=>{
+          let w = img.width, h = img.height;
+          if(w > h){ if(w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; } }
+          else { if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; } }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          let quality = 0.6;
+          let out = canvas.toDataURL('image/jpeg', quality);
+          while(out.length > 42000 && quality > 0.25){
+            quality -= 0.1;
+            out = canvas.toDataURL('image/jpeg', quality);
+          }
+          if(out.length > 42000){ reject(new Error('ຮູບໃຫຍ່ເກີນໄປສຳລັບ Google Sheet')); return; }
+          resolve(out);
+        };
+        img.onerror = ()=> reject(new Error('ບໍ່ສາມາດອ່ານຮູບໄດ້'));
+        img.src = e.target.result;
+      };
+      reader.onerror = ()=> reject(new Error('ອ່ານໄຟລ໌ບໍ່ສຳເລັດ'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  $('pf_image_pick').addEventListener('click', ()=> $('pf_image_input').click());
+  $('pf_image_input').addEventListener('change', async (e)=>{
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    try{
+      const dataUrl = await resizeImageFile(file, 160);
+      setImagePreview(dataUrl);
+    }catch(err){
+      toast('ບໍ່ສາມາດເພີ່ມຮູບໄດ້: ' + err.message);
+    }
+  });
+  $('pf_image_remove').addEventListener('click', ()=> setImagePreview(''));
+
+  // ---------- Variant row editor (product modal) ----------
+  function variantRowHtml(v){
+    v = v || {id:uid(), name:'', barcode:'', cost:0, price:0, stock:0};
+    return `<div class="variant-row" data-vid="${v.id}">
+      <input class="v-name" placeholder="ຊື່ຕົວເລືອກ ເຊັ່ນ: ຂະໜາດ M" value="${escapeHtml(v.name)}">
+      <input class="v-barcode" placeholder="ບາໂຄດ (ຖ້າມີ)" value="${escapeHtml(v.barcode||'')}">
+      <input class="v-cost" type="number" min="0" step="0.01" placeholder="ທຶນ" value="${v.cost||0}">
+      <input class="v-price" type="number" min="0" step="0.01" placeholder="ລາຄາ" value="${v.price||0}">
+      <input class="v-stock" type="number" min="0" placeholder="ຄົງເຫຼືອ" value="${v.stock||0}">
+      <button type="button" class="vrow-remove" title="ລຶບຕົວເລືອກ">✕</button>
+    </div>`;
+  }
+  function renderVariantRows(variants){
+    const wrap = $('pf_variant_list');
+    wrap.innerHTML = (variants||[]).map(variantRowHtml).join('');
+    wrap.querySelectorAll('.vrow-remove').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ btn.closest('.variant-row').remove(); toggleVariantHint(); });
+    });
+    toggleVariantHint();
+  }
+  function toggleVariantHint(){
+    const has = $('pf_variant_list').children.length > 0;
+    $('pf_variant_hint').style.display = has ? 'block' : 'none';
+  }
+  function collectVariantRows(){
+    const rows = Array.from($('pf_variant_list').querySelectorAll('.variant-row'));
+    return rows.map(row=>({
+      id: row.dataset.vid,
+      name: row.querySelector('.v-name').value.trim(),
+      barcode: row.querySelector('.v-barcode').value.trim(),
+      cost: Number(row.querySelector('.v-cost').value)||0,
+      price: Number(row.querySelector('.v-price').value)||0,
+      stock: Number(row.querySelector('.v-stock').value)||0
+    })).filter(v=>v.name);
+  }
+  $('pf_variant_add').addEventListener('click', ()=>{
+    $('pf_variant_list').insertAdjacentHTML('beforeend', variantRowHtml());
+    const rows = $('pf_variant_list').querySelectorAll('.variant-row');
+    const last = rows[rows.length-1];
+    last.querySelector('.vrow-remove').addEventListener('click', ()=>{ last.remove(); toggleVariantHint(); });
+    last.querySelector('.v-name').focus();
+    toggleVariantHint();
+  });
+
+  function openProductModal(id){
+    if(id){
+      const p = products.find(x=>x.id===id);
+      $('productModalTitle').textContent = 'ແກ້ໄຂສິນຄ້າ';
+      $('pf_id').value = p.id;
+      $('pf_barcode').value = p.barcode||'';
+      $('pf_name').value = p.name;
+      $('pf_unit').value = p.unit||'';
+      $('pf_stock').value = p.stock;
+      $('pf_cost').value = p.cost;
+      $('pf_price').value = p.price;
+      setImagePreview(p.image||'');
+      renderVariantRows(p.variants||[]);
+    } else {
+      $('productModalTitle').textContent = 'ເພີ່ມສິນຄ້າ';
+      $('pf_id').value='';
+      $('pf_barcode').value='';
+      $('pf_name').value='';
+      $('pf_unit').value='ອັນ';
+      $('pf_stock').value=0;
+      $('pf_cost').value=0;
+      $('pf_price').value=0;
+      setImagePreview('');
+      renderVariantRows([]);
+    }
+    openModal('productModal');
+    setTimeout(()=>$('pf_barcode').focus(), 50);
+  }
+  $('addProductBtn').addEventListener('click', ()=>openProductModal(null));
+
+  $('saveProductBtn').addEventListener('click', async ()=>{
+    const name = $('pf_name').value.trim();
+    if(!name){ toast('ກະລຸນາປ້ອນຊື່ສິນຄ້າ'); return; }
+    const id = $('pf_id').value;
+    const variants = collectVariantRows();
+    const data = {
+      barcode: $('pf_barcode').value.trim(),
+      name,
+      unit: $('pf_unit').value.trim(),
+      stock: Number($('pf_stock').value)||0,
+      cost: Number($('pf_cost').value)||0,
+      price: Number($('pf_price').value)||0,
+      image: $('pf_image').value || '',
+      variants,
+    };
+    if(id){
+      const p = products.find(x=>x.id===id);
+      Object.assign(p, data);
+    } else {
+      products.push(Object.assign({id:uid()}, data));
+    }
+    await saveProducts();
+    closeModal('productModal');
+    renderStockTable();
+    renderProductGrid();
+    toast('ບັນທຶກສິນຄ້າສຳເລັດ');
+  });
+
+  async function deleteProduct(id){
+    if(!confirm('ຕ້ອງການລຶບສິນຄ້ານີ້ບໍ?')) return;
+    products = products.filter(p=>p.id!==id);
+    await saveProducts();
+    renderStockTable();
+    renderProductGrid();
+    toast('ລຶບສິນຄ້າແລ້ວ');
+  }
+
+  function openAdjustModal(id){
+    const p = products.find(x=>x.id===id);
+    $('adj_id').value = id;
+    const hasVariants = p.variants && p.variants.length>0;
+    if(hasVariants){
+      $('adjustProductName').textContent = p.name;
+      $('adj_variant_field').style.display = '';
+      $('adj_variant').innerHTML = p.variants.map(v=>`<option value="${v.id}">${escapeHtml(v.name)} (ຄົງເຫຼືອ ${v.stock||0})</option>`).join('');
+    } else {
+      $('adjustProductName').textContent = `${p.name} (ຄົງເຫຼືອປັດຈຸບັນ: ${p.stock})`;
+      $('adj_variant_field').style.display = 'none';
+      $('adj_variant').innerHTML = '';
+    }
+    $('adj_qty').value = '';
+    openModal('adjustModal');
+    setTimeout(()=>$('adj_qty').focus(), 50);
+  }
+  $('saveAdjustBtn').addEventListener('click', async ()=>{
+    const id = $('adj_id').value;
+    const delta = Number($('adj_qty').value);
+    if(!delta){ toast('ກະລຸນາປ້ອນຈຳນວນ'); return; }
+    const p = products.find(x=>x.id===id);
+    if(p.variants && p.variants.length){
+      const v = p.variants.find(v=>v.id===$('adj_variant').value);
+      if(v) v.stock = Math.max(0, (v.stock||0) + delta);
+    } else {
+      p.stock = Math.max(0, p.stock + delta);
+    }
+    await saveProducts();
+    closeModal('adjustModal');
+    renderStockTable();
+    renderProductGrid();
+    toast('ປັບປຸງສະຕັອກສຳເລັດ');
+  });
+
+  $('exportProductsBtn').addEventListener('click', async ()=>{
+    if(products.length===0){ toast('ບໍ່ມີຂໍ້ມູນສິນຄ້າ'); return; }
+    const ok = await loadXLSXIfNeeded();
+    if(!ok){ toast('ບໍ່ສາມາດໂຫລດໄລບຣารີ Excel ໄດ້ — ກະລຸນາກວດສອບອິນເຕີເນັດແລ້ວລອງໃໝ່'); return; }
+    const rows = [];
+    products.forEach(p=>{
+      if(p.variants && p.variants.length){
+        p.variants.forEach(v=>{
+          rows.push({
+            'ບາໂຄດ': v.barcode||'',
+            'ຊື່ສິນຄ້າ': `${p.name} - ${v.name}`,
+            'ໜ່ວຍ': p.unit||'',
+            'ລາຄາທຶນ': p.cost,
+            'ລາຄາຂາຍ': v.price,
+            'ຄົງເຫຼືອ': v.stock||0,
+            'ມູນຄ່າສະຕັອກ(ທຶນ)': +((p.cost||0)*(v.stock||0)).toFixed(2)
+          });
+        });
+      } else {
+        rows.push({
+          'ບາໂຄດ': p.barcode||'',
+          'ຊື່ສິນຄ້າ': p.name,
+          'ໜ່ວຍ': p.unit||'',
+          'ລາຄາທຶນ': p.cost,
+          'ລາຄາຂາຍ': p.price,
+          'ຄົງເຫຼືອ': p.stock,
+          'ມູນຄ່າສະຕັອກ(ທຶນ)': +(p.cost*p.stock).toFixed(2)
+        });
+      }
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'ສິນຄ້າ');
+    XLSX.writeFile(wb, `ລາຍການສິນຄ້າ_${dateStamp()}.xlsx`);
+  });
+
+  // ---------- Import ----------
+  function loadXLSXIfNeeded(){
+    return new Promise((resolve)=>{
+      if(typeof XLSX !== 'undefined'){ resolve(true); return; }
+      let s = document.querySelector('script[data-xlsx-loader]');
+      if(!s){
+        s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.setAttribute('data-xlsx-loader','1');
+        document.head.appendChild(s);
+      }
+      let settled = false;
+      const done = (ok)=>{ if(settled) return; settled = true; resolve(ok); };
+      s.addEventListener('load', ()=> done(typeof XLSX !== 'undefined'));
+      s.addEventListener('error', ()=> done(false));
+      setTimeout(()=> done(typeof XLSX !== 'undefined'), 8000);
+    });
+  }
+
+  // Minimal CSV parser (handles quoted fields, commas/newlines inside quotes, BOM) —
+  // used so CSV import/link-import works even if the Excel library fails to load.
+  function parseCSV(text){
+    if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for(let i=0;i<text.length;i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else {
+        if(c === '"'){ inQuotes = true; }
+        else if(c === ','){ row.push(field); field = ''; }
+        else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+        else if(c === '\r'){ /* ignore, \n handles line breaks */ }
+        else field += c;
+      }
+    }
+    if(field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+    const cleanRows = rows.filter(r => r.some(c => String(c).trim() !== ''));
+    if(cleanRows.length===0) return [];
+    const headers = cleanRows[0].map(h=>String(h).trim());
+    return cleanRows.slice(1).map(r=>{
+      const obj = {};
+      headers.forEach((h,idx)=> obj[h] = r[idx] !== undefined ? r[idx] : '');
+      return obj;
+    });
+  }
+
+  const HEADER_MAP = {
+    barcode: ['barcode','บาร์โค้ด','ບາໂຄດ','code','รหัส','ລະຫັດ'],
+    name: ['name','ชื่อสินค้า','ຊື່ສິນຄ້າ','product','product name','สินค้า','ສິນຄ້າ'],
+    unit: ['unit','หน่วย','ໜ່ວຍ'],
+    cost: ['cost','ราคาทุน','ລາຄາທຶນ','ทุน','ທຶນ'],
+    price: ['price','ราคาขาย','ລາຄາຂາຍ','ราคา','ລາຄາ'],
+    stock: ['stock','คงเหลือ','ຄົງເຫຼືອ','qty','quantity','จำนวน','ຈຳນວນ']
+  };
+  function normalizeKey(k){ return String(k||'').trim().toLowerCase(); }
+  function mapRow(row){
+    const out = {barcode:'', name:'', unit:'', cost:0, price:0, stock:0};
+    const keys = Object.keys(row);
+    for(const field in HEADER_MAP){
+      const aliases = HEADER_MAP[field];
+      const foundKey = keys.find(k => aliases.includes(normalizeKey(k)));
+      if(foundKey !== undefined){
+        const val = row[foundKey];
+        if(field==='cost' || field==='price' || field==='stock'){
+          out[field] = Number(val) || 0;
+        } else {
+          out[field] = val ? String(val).trim() : '';
+        }
+      }
+    }
+    return out;
+  }
+
+  function applyImportRows(rows){
+    let added = 0, updated = 0, skipped = 0;
+    rows.forEach(raw=>{
+      const r = mapRow(raw);
+      if(!r.name){ skipped++; return; }
+      let existing = null;
+      if(r.barcode) existing = products.find(p=> p.barcode && p.barcode.toLowerCase()===r.barcode.toLowerCase());
+      if(!existing) existing = products.find(p=> p.name.toLowerCase()===r.name.toLowerCase());
+      if(existing){
+        existing.barcode = r.barcode || existing.barcode;
+        existing.name = r.name || existing.name;
+        existing.unit = r.unit || existing.unit;
+        existing.cost = r.cost || existing.cost;
+        existing.price = r.price || existing.price;
+        existing.stock = r.stock;
+        updated++;
+      } else {
+        products.push({
+          id: uid(), barcode: r.barcode, name: r.name, unit: r.unit||'ອັນ',
+          cost: r.cost, price: r.price, stock: r.stock
+        });
+        added++;
+      }
+    });
+    return {added, updated, skipped};
+  }
+
+  async function finishImport(rows){
+    if(!rows || rows.length===0){
+      showImportSummary('ອ່ານໄຟລ໌ໄດ້ແຕ່ບໍ່ພົບແຖວຂໍ້ມູນ — ກວດສອບວ່າແຖວທຳອິດເປັນຫົວຕາຕະລາງ (ຊື່ຄໍລຳ) ແລະມີຢ່າງນ້ອຍ 1 ແຖວຂໍ້ມູນ', true);
+      return;
+    }
+    const result = applyImportRows(rows);
+    if(result.added===0 && result.updated===0){
+      showImportSummary(`ອ່ານໄດ້ ${rows.length} ແຖວ ແຕ່ນຳເຂົ້າບໍ່ໄດ້ຈັກແຖວ — ກວດສອບວ່າມີຄໍລຳ "ຊື່ສິນຄ້າ" (ຫຼື name) ໃນຫົວຕາຕະລາງບໍ່`, true);
+      return;
+    }
+    await saveProducts();
+    renderStockTable();
+    renderProductGrid();
+    showImportSummary(`ອ່ານໄດ້ ${rows.length} ແຖວ — ນຳເຂົ້າສຳເລັດ: ເພີ່ມໃໝ່ ${result.added} ລາຍການ, ອັບເດດ ${result.updated} ລາຍການ${result.skipped? `, ຂ້າມ ${result.skipped} ແຖວ (ບໍ່ມີຊື່ສິນຄ້າ)`:''}`, false);
+    toast('ນຳເຂົ້າສິນຄ້າສຳເລັດ');
+  }
+
+  function showImportSummary(msg, isError){
+    const el = $('importSummary');
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.background = isError ? 'var(--danger-bg)' : '#E4F3EA';
+    el.style.color = isError ? 'var(--danger)' : 'var(--success)';
+  }
+
+  $('importBtn').addEventListener('click', ()=>{
+    $('importSummary').style.display = 'none';
+    $('importLinkInput').value = '';
+    openModal('importModal');
+  });
+
+  document.querySelectorAll('[data-importtab]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-importtab]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.import-pane').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      $('importPane-'+btn.dataset.importtab).classList.add('active');
+    });
+  });
+
+  const dropZone = $('dropZone');
+  const importFileInput = $('importFileInput');
+  dropZone.addEventListener('click', ()=> importFileInput.click());
+  dropZone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropZone.style.borderColor='var(--amber)'; });
+  dropZone.addEventListener('dragleave', ()=>{ dropZone.style.borderColor='var(--border)'; });
+  dropZone.addEventListener('drop', (e)=>{
+    e.preventDefault();
+    dropZone.style.borderColor='var(--border)';
+    if(e.dataTransfer.files && e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
+  });
+  importFileInput.addEventListener('change', (e)=>{
+    if(e.target.files && e.target.files[0]) handleImportFile(e.target.files[0]);
+    importFileInput.value = '';
+  });
+
+  function handleImportFile(file){
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+
+    if(ext === 'csv'){
+      const reader = new FileReader();
+      reader.onload = async (e)=>{
+        try{
+          const rows = parseCSV(String(e.target.result));
+          await finishImport(rows);
+        }catch(err){
+          showImportSummary('ອ່ານໄຟລ໌ບໍ່ສຳເລັດ: ' + err.message, true);
+        }
+      };
+      reader.onerror = ()=> showImportSummary('ອ່ານໄຟລ໌ບໍ່ສຳເລັດ', true);
+      reader.readAsText(file, 'utf-8');
+      return;
+    }
+
+    // .xlsx / .xls need the Excel-reading library
+    showImportSummary('ກຳລັງໂຫລດໄຟລ໌...', false);
+    loadXLSXIfNeeded().then(ok=>{
+      if(!ok){
+        showImportSummary('ບໍ່ສາມາດໂຫລດໄລບຣารີສຳລັບອ່ານໄຟລ໌ Excel ໄດ້ (ອາດເປັນຍ້ອນອິນເຕີເນັດ) — ລອງບັນທຶກເປັນ .csv ແລ້ວອັບໂຫລດແທນ', true);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async (e)=>{
+        try{
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, {type:'array'});
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+          await finishImport(rows);
+        }catch(err){
+          showImportSummary('ອ່ານໄຟລ໌ບໍ່ສຳເລັດ: ' + err.message, true);
+        }
+      };
+      reader.onerror = ()=> showImportSummary('ອ່ານໄຟລ໌ບໍ່ສຳເລັດ', true);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  $('importLinkBtn').addEventListener('click', async ()=>{
+    const url = $('importLinkInput').value.trim();
+    if(!url){ showImportSummary('ກະລຸນາໃສ່ລິ້ງ Google Sheet CSV', true); return; }
+    showImportSummary('ກຳລັງດຶງຂໍ້ມູນ...', false);
+    try{
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const rows = parseCSV(text);
+      await finishImport(rows);
+    }catch(err){
+      showImportSummary(`ດຶງຂໍ້ມູນຈາກລິ້ງບໍ່ສຳເລັດ (ອາດຕິດ CORS ຫຼືລິ້ງບໍ່ຖືກຕ້ອງ) — ກະລຸນາດາວໂຫລດເປັນ .csv ແລ້ວອັບໂຫລດແທນ · ${err.message}`, true);
+    }
+  });
+
+  // ---------- History tab ----------
+  function dateStamp(){
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function filteredSales(){
+    const from = $('histFrom').value;
+    const to = $('histTo').value;
+    return sales.filter(s=>{
+      const d = s.datetime.slice(0,10);
+      if(from && d < from) return false;
+      if(to && d > to) return false;
+      return true;
+    });
+  }
+
+  function renderHistoryStats(){
+    const list = filteredSales().filter(s=>!s.cancelled);
+    const totalSales = list.length;
+    const totalRevenue = list.reduce((a,s)=>a+s.total,0);
+    const totalItems = list.reduce((a,s)=>a+s.items.reduce((x,i)=>x+i.qty,0),0);
+    $('historyStats').innerHTML = `
+      <div class="stat"><div class="label">ຈຳນວນໃບບິນ</div><div class="value">${totalSales}</div></div>
+      <div class="stat"><div class="label">ຍອດຂາຍລວມ</div><div class="value">${settings.currency}${fmt(totalRevenue)}</div></div>
+      <div class="stat"><div class="label">ຈຳນວນສິນຄ້າທີ່ຂາຍ</div><div class="value">${totalItems}</div></div>
+    `;
+  }
+
+  let historyView = 'detail';
+
+  document.querySelectorAll('[data-histview]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-histview]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      historyView = btn.dataset.histview;
+      $('histDetailWrap').style.display = historyView==='detail' ? '' : 'none';
+      $('histDailyWrap').style.display = historyView==='daily' ? '' : 'none';
+      $('histProfitWrap').style.display = historyView==='profit' ? '' : 'none';
+      if(historyView==='profit') renderProfitByProduct();
+    });
+  });
+
+  function goToDetailForDate(dateStr){
+    $('histFrom').value = dateStr;
+    $('histTo').value = dateStr;
+    document.querySelector('[data-histview="detail"]').click();
+    renderHistoryTable();
+  }
+
+  // Item cost may be missing on sales recorded before profit-tracking was added —
+  // fall back to the product/variant's current cost in that case.
+  function itemUnitCost(item){
+    return (item.cost !== undefined && item.cost !== null) ? item.cost : getItemCost(item.productId, item.variantId);
+  }
+
+  function dailySummaryRows(){
+    const list = filteredSales().filter(s=>!s.cancelled);
+    const map = {};
+    list.forEach(s=>{
+      const day = s.datetime.slice(0,10);
+      if(!map[day]) map[day] = {date:day, bills:0, items:0, total:0, cost:0};
+      map[day].bills += 1;
+      map[day].items += s.items.reduce((a,i)=>a+i.qty,0);
+      map[day].total += s.total;
+      map[day].cost += s.items.reduce((a,i)=> a + itemUnitCost(i)*i.qty, 0);
+    });
+    return Object.values(map).sort((a,b)=> b.date.localeCompare(a.date));
+  }
+
+  function fmtDayLabel(dayStr){
+    const d = new Date(dayStr + 'T00:00:00');
+    return d.toLocaleDateString('lo-LA', {year:'numeric', month:'short', day:'numeric'});
+  }
+
+  function renderDailySummary(){
+    const rows = dailySummaryRows();
+    const tbody = $('historyDailyTableBody');
+    if(rows.length===0){
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">ຍັງບໍ່ມີປະຫວັດການຂາຍ</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r=>{
+      const profit = r.total - r.cost;
+      const margin = r.total>0 ? (profit/r.total*100) : 0;
+      return `
+      <tr data-date="${r.date}">
+        <td>${fmtDayLabel(r.date)}</td>
+        <td class="mono">${r.bills}</td>
+        <td class="mono">${r.items} ອັນ</td>
+        <td class="mono" style="font-weight:800;">${settings.currency}${fmt(r.total)}</td>
+        <td class="mono profit-col">${settings.currency}${fmt(r.cost)}</td>
+        <td class="mono profit-col" style="color:${profit>=0?'var(--success)':'var(--danger)'};font-weight:700;">${settings.currency}${fmt(profit)}</td>
+        <td class="mono profit-col">${fmt(margin)}%</td>
+        <td><button class="btn btn-outline btn-sm view-day-btn">ເບິ່ງລາຍລະອຽດ</button></td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      tr.querySelector('.view-day-btn').addEventListener('click', ()=> goToDetailForDate(tr.dataset.date));
+    });
+  }
+
+  function profitByProductRows(){
+    const list = filteredSales().filter(s=>!s.cancelled);
+    const map = {};
+    list.forEach(s=>{
+      s.items.forEach(it=>{
+        const key = it.productId + '::' + (it.variantId||'base');
+        if(!map[key]) map[key] = {name:it.name, qty:0, revenue:0, cost:0};
+        map[key].qty += it.qty;
+        map[key].revenue += it.total;
+        map[key].cost += itemUnitCost(it)*it.qty;
+      });
+    });
+    return Object.values(map).sort((a,b)=> (b.revenue-b.cost) - (a.revenue-a.cost));
+  }
+
+  function renderProfitByProduct(){
+    const rows = profitByProductRows();
+    const tbody = $('historyProfitTableBody');
+    if(rows.length===0){
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state">ຍັງບໍ່ມີຂໍ້ມູນ</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r=>{
+      const profit = r.revenue - r.cost;
+      const margin = r.revenue>0 ? (profit/r.revenue*100) : 0;
+      return `<tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td class="mono">${r.qty}</td>
+        <td class="mono">${settings.currency}${fmt(r.revenue)}</td>
+        <td class="mono">${settings.currency}${fmt(r.cost)}</td>
+        <td class="mono" style="color:${profit>=0?'var(--success)':'var(--danger)'};font-weight:700;">${settings.currency}${fmt(profit)}</td>
+        <td class="mono">${fmt(margin)}%</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderHistoryTable(){
+    renderHistoryStats();
+    const list = filteredSales();
+    const tbody = $('historyTableBody');
+    if(list.length===0){
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-state">ຍັງບໍ່ມີປະຫວັດການຂາຍ</td></tr>`;
+    } else {
+      tbody.innerHTML = list.map(s=>{
+        const dt = new Date(s.datetime);
+        const dtStr = dt.toLocaleDateString('lo-LA') + ' ' + dt.toLocaleTimeString('lo-LA',{hour:'2-digit',minute:'2-digit'});
+        const itemCount = s.items.reduce((a,i)=>a+i.qty,0);
+        const payLabel = PAY_METHOD_LABELS[s.paymentMethod] || 'ເງິນສົດ';
+        return `<tr data-id="${s.id}" class="${s.cancelled?'low-stock':''}">
+          <td class="mono">${s.receiptNo}</td>
+          <td>${dtStr}</td>
+          <td>${escapeHtml(s.customerName||'-')}</td>
+          <td>${escapeHtml(s.staffName||'-')}</td>
+          <td>${itemCount} ອັນ</td>
+          <td class="mono">${settings.currency}${fmt(s.total)}</td>
+          <td>${s.paymentMethod==='credit'? '<span class="badge low">ຄ້າງຈ່າຍ</span>' : escapeHtml(payLabel)}</td>
+          <td>${s.cancelled? '<span class="badge low">ຍົກເລີກແລ້ວ</span>' : '<span class="badge ok">ປົກກະຕິ</span>'}</td>
+          <td class="row-actions">
+            <button class="btn btn-outline btn-sm view-btn">ເບິ່ງ/ພິມ</button>
+            ${s.cancelled ? '' : '<button class="btn btn-danger btn-sm cancel-btn">ຍົກເລີກ</button>'}
+          </td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('tr').forEach(tr=>{
+        const id = tr.dataset.id;
+        tr.querySelector('.view-btn').addEventListener('click', ()=>{
+          const sale = sales.find(s=>s.id===id);
+          showReceipt(sale);
+        });
+        const cancelBtn = tr.querySelector('.cancel-btn');
+        if(cancelBtn) cancelBtn.addEventListener('click', ()=> cancelSale(id));
+      });
+    }
+    renderDailySummary();
+    if(historyView==='profit') renderProfitByProduct();
+  }
+  $('histFrom').addEventListener('change', renderHistoryTable);
+  $('histTo').addEventListener('change', renderHistoryTable);
+
+  $('exportSalesBtn').addEventListener('click', async ()=>{
+    const list = filteredSales();
+    if(list.length===0){ toast('ບໍ່ມີຂໍ້ມູນການຂາຍ'); return; }
+    if(!canViewProfit() && historyView === 'profit'){ toast('ທ່ານບໍ່ມີສິດເບິ່ງລາຍງານກຳໄລ'); return; }
+    const ok = await loadXLSXIfNeeded();
+    if(!ok){ toast('ບໍ່ສາມາດໂຫລດໄລບຣารີ Excel ໄດ້ — ກະລຸນາກວດສອບອິນເຕີເນັດແລ້ວລອງໃໝ່'); return; }
+    const wb = XLSX.utils.book_new();
+
+    if(historyView === 'daily'){
+      const showProfit = canViewProfit();
+      const rows = dailySummaryRows().map(r=>{
+        const profit = r.total - r.cost;
+        const margin = r.total>0 ? (profit/r.total*100) : 0;
+        const row = {
+          'ວັນທີ': r.date,
+          'ຈຳນວນໃບບິນ': r.bills,
+          'ຈຳນວນສິນຄ້າ': r.items,
+          'ຍອດຂາຍລວມ': r.total
+        };
+        if(showProfit){
+          row['ຕົ້ນທຶນ'] = +r.cost.toFixed(2);
+          row['ກຳໄລ'] = +profit.toFixed(2);
+          row['%ກຳໄລ'] = +margin.toFixed(2);
+        }
+        return row;
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, 'ສະຫຼຸບລາຍວັນ');
+      XLSX.writeFile(wb, `ສະຫຼຸບຍອດຂາຍລາຍວັນ_${dateStamp()}.xlsx`);
+      return;
+    }
+
+    if(historyView === 'profit'){
+      const rows = profitByProductRows().map(r=>{
+        const profit = r.revenue - r.cost;
+        const margin = r.revenue>0 ? (profit/r.revenue*100) : 0;
+        return {
+          'ຊື່ສິນຄ້າ': r.name,
+          'ຈຳນວນທີ່ຂາຍ': r.qty,
+          'ຍອດຂາຍ': +r.revenue.toFixed(2),
+          'ຕົ້ນທຶນ': +r.cost.toFixed(2),
+          'ກຳໄລ': +profit.toFixed(2),
+          '%ກຳໄລ': +margin.toFixed(2)
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, 'ກຳໄລຕາມສິນຄ້າ');
+      XLSX.writeFile(wb, `ລາຍງານກຳໄລຕາມສິນຄ້າ_${dateStamp()}.xlsx`);
+      return;
+    }
+
+    const showProfit = canViewProfit();
+    const rows = [];
+    list.forEach(s=>{
+      const dt = new Date(s.datetime);
+      const dtStr = dt.toLocaleDateString('lo-LA') + ' ' + dt.toLocaleTimeString('lo-LA',{hour:'2-digit',minute:'2-digit'});
+      const payLabel = PAY_METHOD_LABELS[s.paymentMethod] || 'ເງິນສົດ';
+      s.items.forEach(it=>{
+        const row = {
+          'ເລກທີ່ໃບບິນ': s.receiptNo,
+          'ວັນທີ/ເວລາ': dtStr,
+          'ລູກຄ້າ': s.customerName || '',
+          'ພະນັກງານ': s.staffName || '',
+          'ສິນຄ້າ': it.name,
+          'ຈຳນວນ': it.qty,
+          'ລາຄາຕໍ່ໜ່ວຍ': it.price,
+          'ລວມ': it.total
+        };
+        if(showProfit){
+          row['ຕົ້ນທຶນຕໍ່ໜ່ວຍ'] = itemUnitCost(it);
+          row['ກຳໄລລາຍການ'] = +((it.price - itemUnitCost(it)) * it.qty).toFixed(2);
+        }
+        row['ສ່ວນຫຼຸດທັງໃບບິນ'] = s.discount;
+        row['ຍອດສຸດທິທັງໃບບິນ'] = s.total;
+        row['ວິທີຊຳລະ'] = payLabel;
+        row['ສະຖານະ'] = s.cancelled ? 'ຍົກເລີກແລ້ວ' : 'ປົກກະຕິ';
+        rows.push(row);
+      });
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'ປະຫວັດການຂາຍ');
+    XLSX.writeFile(wb, `ປະຫວັດການຂາຍ_${dateStamp()}.xlsx`);
+  });
+
+  // ---------- Promotions ----------
+  function promoDetailLabel(p){
+    return p.type==='percent' ? `${p.value}%` : `${settings.currency}${fmt(p.value)}`;
+  }
+
+  function renderPromoSelect(){
+    const sel = $('promoSelect');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">ບໍ່ໃຊ້</option>' +
+      promotions.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} (-${promoDetailLabel(p)})</option>`).join('');
+    if(promotions.some(p=>p.id===current)) sel.value = current;
+  }
+
+  $('promoSelect').addEventListener('change', ()=>{
+    const promo = promotions.find(p=>p.id===$('promoSelect').value);
+    if(!promo) return; // "ບໍ່ໃຊ້" selected — leave the discount field as-is
+    const amount = promo.type==='percent' ? cartSubtotal()*promo.value/100 : promo.value;
+    $('discountInput').value = Math.round(amount*100)/100;
+    renderCart();
+  });
+
+  function renderPromoList(){
+    const list = $('promoList');
+    if(promotions.length===0){
+      list.innerHTML = '<div class="empty-state">ຍັງບໍ່ມີໂປຣໂມຊັນ — ກົດ "ເພີ່ມໂປຣໂມຊັນ" ເພື່ອເລີ່ມຕົ້ນ</div>';
+      return;
+    }
+    list.innerHTML = promotions.map(p=>`
+      <div class="promo-row" data-id="${p.id}">
+        <div>
+          <div class="pn-name">${escapeHtml(p.name)}</div>
+          <div class="pn-detail">-${promoDetailLabel(p)}</div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm promo-edit-btn">ແກ້ໄຂ</button>
+        <button type="button" class="btn btn-danger btn-sm promo-del-btn">ລຶບ</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.promo-row').forEach(row=>{
+      const id = row.dataset.id;
+      row.querySelector('.promo-edit-btn').addEventListener('click', ()=>{ closeModal('promoModal'); openPromoEditModal(id); });
+      row.querySelector('.promo-del-btn').addEventListener('click', ()=> deletePromo(id));
+    });
+  }
+
+  $('managePromoBtn').addEventListener('click', ()=>{
+    renderPromoList();
+    openModal('promoModal');
+  });
+
+  function updatePromoValueLabel(){
+    $('pe_value_label').textContent = $('pe_type').value==='percent' ? 'ຈຳນວນ %' : `ຈຳນວນເງິນ (${settings.currency})`;
+  }
+  $('pe_type').addEventListener('change', updatePromoValueLabel);
+
+  function openPromoEditModal(id){
+    if(id){
+      const p = promotions.find(x=>x.id===id);
+      $('promoEditTitle').textContent = 'ແກ້ໄຂໂປຣໂມຊັນ';
+      $('pe_id').value = p.id;
+      $('pe_name').value = p.name;
+      $('pe_type').value = p.type;
+      $('pe_value').value = p.value;
+    } else {
+      $('promoEditTitle').textContent = 'ເພີ່ມໂປຣໂມຊັນ';
+      $('pe_id').value = '';
+      $('pe_name').value = '';
+      $('pe_type').value = 'percent';
+      $('pe_value').value = 0;
+    }
+    updatePromoValueLabel();
+    openModal('promoEditModal');
+    setTimeout(()=>$('pe_name').focus(), 50);
+  }
+  $('addPromoBtn').addEventListener('click', ()=>{ closeModal('promoModal'); openPromoEditModal(null); });
+
+  $('savePromoBtn').addEventListener('click', async ()=>{
+    const name = $('pe_name').value.trim();
+    if(!name){ toast('ກະລຸນາປ້ອນຊື່ໂປຣໂມຊັນ'); return; }
+    const id = $('pe_id').value;
+    const data = { name, type: $('pe_type').value, value: Number($('pe_value').value)||0 };
+    if(id){
+      const p = promotions.find(x=>x.id===id);
+      Object.assign(p, data);
+    } else {
+      promotions.push(Object.assign({id:uid()}, data));
+    }
+    await savePromotions();
+    renderPromoSelect();
+    closeModal('promoEditModal');
+    renderPromoList();
+    openModal('promoModal');
+    toast('ບັນທຶກໂປຣໂມຊັນສຳເລັດ');
+  });
+
+  async function deletePromo(id){
+    if(!confirm('ຕ້ອງການລຶບໂປຣໂມຊັນນີ້ບໍ?')) return;
+    promotions = promotions.filter(p=>p.id!==id);
+    await savePromotions();
+    renderPromoSelect();
+    renderPromoList();
+    toast('ລຶບໂປຣໂມຊັນແລ້ວ');
+  }
+
+  // ---------- Stock Movements (withdrawal / branch transfer / damaged / return) ----------
+  // These deduct stock like a sale, but are never counted toward revenue.
+  const MOV_TYPE_LABELS = { withdrawal:'ເບີກສິນຄ້າ', transfer:'ໂອນສາຂາ', damaged:'ສິນຄ້າເສຍ/ຂາດ', return:'ສົ່ງຄືນສິນຄ້າ' };
+  const MOV_NOTE_PLACEHOLDERS = {
+    withdrawal: 'ເຊັ່ນ: ເບີກໃຫ້ພະນັກງານ, ຕົວຢ່າງສິນຄ້າ...',
+    transfer: 'ຊື່ສາຂາປາຍທາງ...',
+    damaged: 'ສາເຫດ ເຊັ່ນ: ແຕກ, ໝົດອາຍຸ...',
+    return: 'ສົ່ງຄືນຫາໃຜ / ສາເຫດ...'
+  };
+  let movItemsCart = []; // {key, productId, variantId, name, qty}
+
+  document.querySelectorAll('.mov-type-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.mov-type-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      $('mov_type').value = btn.dataset.movtype;
+      $('mov_note').placeholder = MOV_NOTE_PLACEHOLDERS[btn.dataset.movtype] || '';
+    });
+  });
+
+  function renderMovItemsList(){
+    const box = $('mov_items_list');
+    if(movItemsCart.length===0){
+      box.innerHTML = '<div class="empty-state" style="padding:14px 6px;">ຍັງບໍ່ໄດ້ເລືອກສິນຄ້າ</div>';
+      return;
+    }
+    box.innerHTML = movItemsCart.map(it=>`
+      <div class="mov-item-row" data-key="${it.key}">
+        <div class="mov-item-name">${escapeHtml(it.name)}</div>
+        <div class="qty-stepper">
+          <button type="button" class="qty-btn mov-minus">−</button>
+          <div class="qty-val">${it.qty}</div>
+          <button type="button" class="qty-btn mov-plus">+</button>
+        </div>
+        <button type="button" class="ci-remove mov-remove">✕</button>
+      </div>`).join('');
+    box.querySelectorAll('.mov-item-row').forEach(row=>{
+      const key = row.dataset.key;
+      row.querySelector('.mov-plus').addEventListener('click', ()=> changeMovQty(key, 1));
+      row.querySelector('.mov-minus').addEventListener('click', ()=> changeMovQty(key, -1));
+      row.querySelector('.mov-remove').addEventListener('click', ()=>{
+        movItemsCart = movItemsCart.filter(it=>it.key!==key);
+        renderMovItemsList();
+      });
+    });
+  }
+
+  function addToMovCart(productId, variantId){
+    const owner = stockOwner(productId, variantId);
+    if(!owner) return;
+    const key = lineKey(productId, variantId);
+    const inListQty = movItemsCart.filter(it=>it.key===key).reduce((a,it)=>a+it.qty,0);
+    if(inListQty + 1 > owner.stock){ toast(`ສິນຄ້າຄົງເຫຼືອບໍ່ພໍ (ຄົງເຫຼືອ ${owner.stock})`); return; }
+    const existing = movItemsCart.find(it=>it.key===key);
+    if(existing){ existing.qty += 1; }
+    else { movItemsCart.push({key, productId, variantId: variantId||null, name: owner.name, qty: 1}); }
+    renderMovItemsList();
+  }
+
+  function changeMovQty(key, delta){
+    const item = movItemsCart.find(it=>it.key===key);
+    if(!item) return;
+    const owner = stockOwner(item.productId, item.variantId);
+    const newQty = item.qty + delta;
+    if(newQty <= 0){ movItemsCart = movItemsCart.filter(it=>it.key!==key); }
+    else if(owner && newQty > owner.stock){ toast(`ສິນຄ້າຄົງເຫຼືອບໍ່ພໍ (ຄົງເຫຼືອ ${owner.stock})`); return; }
+    else { item.qty = newQty; }
+    renderMovItemsList();
+  }
+
+  function renderMovSearchResults(filter){
+    filter = (filter||'').trim().toLowerCase();
+    const box = $('mov_search_results');
+    if(!filter){ box.innerHTML=''; return; }
+    const list = products.filter(p=> p.name.toLowerCase().includes(filter) || (p.barcode||'').toLowerCase().includes(filter));
+    if(list.length===0){ box.innerHTML = '<div class="empty-state">ບໍ່ພົບສິນຄ້າ</div>'; return; }
+    box.innerHTML = list.map(p=>{
+      const stock = productTotalStock(p);
+      const out = stock<=0;
+      return `<button class="product-card" data-id="${p.id}" ${out?'disabled':''}>
+        <div class="p-name">${escapeHtml(p.name)}</div>
+        <div class="p-stock">ຄົງເຫຼືອ ${stock} ${escapeHtml(p.unit||'')}</div>
+      </button>`;
+    }).join('');
+    box.querySelectorAll('.product-card').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const p = products.find(x=>x.id===btn.dataset.id);
+        if(p.variants && p.variants.length){
+          openVariantPick(p.id, (pid, vid)=> addToMovCart(pid, vid));
+        } else {
+          addToMovCart(p.id, null);
+        }
+      });
+    });
+  }
+  $('mov_search').addEventListener('input', (e)=> renderMovSearchResults(e.target.value));
+
+  $('addMovementBtn').addEventListener('click', ()=>{
+    movItemsCart = [];
+    $('mov_note').value = '';
+    $('mov_search').value = '';
+    $('mov_search_results').innerHTML = '';
+    document.querySelectorAll('.mov-type-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelector('.mov-type-btn[data-movtype="withdrawal"]').classList.add('active');
+    $('mov_type').value = 'withdrawal';
+    $('mov_note').placeholder = MOV_NOTE_PLACEHOLDERS.withdrawal;
+    renderMovItemsList();
+    openModal('movementModal');
+  });
+
+  $('saveMovementBtn').addEventListener('click', async ()=>{
+    if(movItemsCart.length===0){ toast('ກະລຸນາເລືອກສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ'); return; }
+    for(const it of movItemsCart){
+      const owner = stockOwner(it.productId, it.variantId);
+      if(owner) owner.setStock(Math.max(0, owner.stock - it.qty));
+    }
+    const movement = {
+      id: uid(),
+      type: $('mov_type').value,
+      datetime: new Date().toISOString(),
+      note: $('mov_note').value.trim(),
+      staffName: currentStaffName,
+      items: movItemsCart.map(it=>({productId:it.productId, variantId:it.variantId, name:it.name, qty:it.qty})),
+      cancelled: false,
+      cancelledAt: null
+    };
+    movements.unshift(movement);
+    await Promise.all([saveProducts(), appendMovementRemote(movement)]);
+    renderProductGrid();
+    renderStockTable();
+    renderMovementTable();
+    closeModal('movementModal');
+    toast('ບັນທຶກລາຍການສຳເລັດ');
+  });
+
+  function filteredMovements(){
+    const from = $('movFrom').value;
+    const to = $('movTo').value;
+    const type = $('movTypeFilter').value;
+    return movements.filter(m=>{
+      const d = m.datetime.slice(0,10);
+      if(from && d < from) return false;
+      if(to && d > to) return false;
+      if(type && m.type !== type) return false;
+      return true;
+    });
+  }
+
+  function renderMovementStats(){
+    const list = filteredMovements().filter(m=>!m.cancelled);
+    const totalMovs = list.length;
+    const totalItems = list.reduce((a,m)=>a+m.items.reduce((x,i)=>x+i.qty,0),0);
+    const byType = {};
+    list.forEach(m=>{ byType[m.type] = (byType[m.type]||0) + m.items.reduce((x,i)=>x+i.qty,0); });
+    $('movementStats').innerHTML = `
+      <div class="stat"><div class="label">ຈຳນວນລາຍການ</div><div class="value">${totalMovs}</div></div>
+      <div class="stat"><div class="label">ຈຳນວນສິນຄ້າທັງໝົດ</div><div class="value">${totalItems}</div></div>
+      <div class="stat"><div class="label">ເບີກ+ໂອນ+ເສຍ+ຄືນ</div><div class="value" style="font-size:12.5px;color:var(--muted);">ບໍ່ນັບເປັນຍອດຂາຍ</div></div>
+    `;
+  }
+
+  function renderMovementTable(){
+    renderMovementStats();
+    const list = filteredMovements();
+    const tbody = $('movementTableBody');
+    if(list.length===0){
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">ຍັງບໍ່ມີລາຍການ</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(m=>{
+      const dt = new Date(m.datetime);
+      const dtStr = dt.toLocaleDateString('lo-LA') + ' ' + dt.toLocaleTimeString('lo-LA',{hour:'2-digit',minute:'2-digit'});
+      const itemsSummary = m.items.map(i=>`${escapeHtml(i.name)} x${i.qty}`).join(', ');
+      const totalQty = m.items.reduce((a,i)=>a+i.qty,0);
+      return `<tr data-id="${m.id}" class="${m.cancelled?'low-stock':''}">
+        <td>${dtStr}</td>
+        <td>${escapeHtml(MOV_TYPE_LABELS[m.type]||m.type)}</td>
+        <td style="max-width:260px;">${itemsSummary}</td>
+        <td class="mono">${totalQty}</td>
+        <td>${escapeHtml(m.staffName||'-')}</td>
+        <td>${escapeHtml(m.note||'-')}</td>
+        <td>${m.cancelled? '<span class="badge low">ຍົກເລີກແລ້ວ</span>' : '<span class="badge ok">ປົກກະຕິ</span>'}</td>
+        <td class="row-actions">
+          ${m.cancelled ? '' : '<button class="btn btn-danger btn-sm mov-cancel-btn">ຍົກເລີກ</button>'}
+        </td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('.mov-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=> cancelMovement(btn.closest('tr').dataset.id));
+    });
+  }
+  $('movFrom').addEventListener('change', renderMovementTable);
+  $('movTo').addEventListener('change', renderMovementTable);
+  $('movTypeFilter').addEventListener('change', renderMovementTable);
+
+  async function cancelMovement(id){
+    const m = movements.find(x=>x.id===id);
+    if(!m || m.cancelled) return;
+    if(!confirm('ຕ້ອງການຍົກເລີກລາຍການນີ້ບໍ? ສະຕັອກຈະຖືກຄືນໃຫ້ອັດຕະໂນມັດ')) return;
+    m.items.forEach(it=>{
+      const owner = stockOwner(it.productId, it.variantId);
+      if(owner) owner.setStock(owner.stock + it.qty);
+    });
+    m.cancelled = true;
+    m.cancelledAt = new Date().toISOString();
+    await Promise.all([saveProducts(), updateMovementRemote(m)]);
+    renderProductGrid();
+    renderStockTable();
+    renderMovementTable();
+    toast('ຍົກເລີກລາຍການສຳເລັດ ຄືນສະຕັອກແລ້ວ');
+  }
+
+  $('exportMovementsBtn').addEventListener('click', async ()=>{
+    const list = filteredMovements();
+    if(list.length===0){ toast('ບໍ່ມີຂໍ້ມູນ'); return; }
+    const ok = await loadXLSXIfNeeded();
+    if(!ok){ toast('ບໍ່ສາມາດໂຫລດໄລບຣารີ Excel ໄດ້ — ກະລຸນາກວດສອບອິນເຕີເນັດແລ້ວລອງໃໝ່'); return; }
+    const rows = [];
+    list.forEach(m=>{
+      const dt = new Date(m.datetime);
+      const dtStr = dt.toLocaleDateString('lo-LA') + ' ' + dt.toLocaleTimeString('lo-LA',{hour:'2-digit',minute:'2-digit'});
+      m.items.forEach(it=>{
+        rows.push({
+          'ວັນທີ/ເວລາ': dtStr,
+          'ປະເພດ': MOV_TYPE_LABELS[m.type]||m.type,
+          'ສິນຄ້າ': it.name,
+          'ຈຳນວນ': it.qty,
+          'ພະນັກງານ': m.staffName||'',
+          'ໝາຍເຫດ': m.note||'',
+          'ສະຖານະ': m.cancelled ? 'ຍົກເລີກແລ້ວ' : 'ປົກກະຕິ'
+        });
+      });
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'ເບີກ-ໂອນ-ອື່ນໆ');
+    XLSX.writeFile(wb, `ລາຍການເບີກ-ໂອນ-ອື່ນໆ_${dateStamp()}.xlsx`);
+  });
+
+  // ---------- Staff / Login (server-authenticated) ----------
+  function updateStaffBtnLabel(){
+    $('staffBtn').textContent = currentStaffName ? '👤 ' + currentStaffName.slice(0,10) : '👤';
+    $('staffBtn').title = currentStaffName ? 'ພະນັກງານ: ' + currentStaffName : 'ພະນັກງານ';
+    applyPermissionsUI();
+  }
+
+  // Profit visibility is decided by the server (currentAuthRole), not
+  // guessed client-side — the underlying cost figures are already absent
+  // from the response for non-managers, this just also hides the UI for them.
+  function canViewProfit(){
+    return currentAuthRole === 'manager';
+  }
+
+  function applyPermissionsUI(){
+    const allowed = canViewProfit();
+    document.body.classList.toggle('hide-profit', !allowed);
+    if(!allowed && historyView==='profit'){
+      const detailBtn = document.querySelector('[data-histview="detail"]');
+      if(detailBtn) detailBtn.click();
+    }
+  }
+
+  function afterAuthChange(){
+    renderProductGrid();
+    renderCart();
+    renderStockTable();
+    renderHistoryTable();
+    renderPromoSelect();
+    updateStaffBtnLabel();
+  }
+
+  function renderStaffPickerList(){
+    const box = $('staffPickerList');
+    if(staff.length===0){
+      box.innerHTML = '<div class="empty-state">ຍັງບໍ່ມີພະນັກງານ — ກົດ "ຈັດການພະນັກງານ" ເພື່ອເພີ່ມ</div>';
+      return;
+    }
+    box.innerHTML = staff.map(s=>`
+      <button type="button" class="pick-row staff-pick-btn" data-id="${s.id}">
+        <span class="pr-name">${escapeHtml(s.name)}${s.isManager? ' 👑':''}</span>
+        ${s.hasPin? '<span class="pr-stock">🔒 ມີ PIN</span>' : ''}
+      </button>`).join('');
+    box.querySelectorAll('.staff-pick-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.id;
+        const s = staff.find(x=>x.id===id);
+        if(!s) return;
+        let pin = '';
+        if(s.hasPin){
+          const entered = prompt(`ໃສ່ PIN ຂອງ ${s.name}:`);
+          if(entered === null) return;
+          pin = entered;
+        }
+        $('staffPickerError').style.display = 'none';
+        try{
+          const auth = await loadAllAs(id, pin);
+          if(!auth.ok){
+            $('staffPickerError').style.display = 'block';
+            $('staffPickerError').textContent = 'PIN ບໍ່ຖືກຕ້ອງ ລອງໃໝ່ອີກຄັ້ງ';
+            return;
+          }
+          setSession(id, pin);
+          afterAuthChange();
+          $('staffPickerModal').dataset.force = '0';
+          $('staffPickerCloseBtn').style.display = '';
+          closeModal('staffPickerModal');
+          toast(`ເຂົ້າສູ່ລະບົບເປັນ ${currentStaffName} ແລ້ວ`);
+        }catch(e){
+          $('staffPickerError').style.display = 'block';
+          $('staffPickerError').textContent = 'ເຂົ້າສູ່ລະບົບບໍ່ສຳເລັດ: ' + e.message;
+        }
+      });
+    });
+  }
+
+  function showLoginScreen(){
+    $('staffPickerError').style.display = 'none';
+    $('staffPickerHint').textContent = 'ເລືອກຊື່ຂອງທ່ານເພື່ອເຂົ້າໃຊ້ງານ';
+    $('logoutBtn').style.display = 'none';
+    renderStaffPickerList();
+    $('staffPickerModal').dataset.force = '1';
+    $('staffPickerCloseBtn').style.display = 'none';
+    openModal('staffPickerModal');
+  }
+
+  $('staffBtn').addEventListener('click', ()=>{
+    $('staffPickerError').style.display = 'none';
+    $('staffPickerHint').textContent = currentStaffName ? 'ສະຫຼັບຜູ້ໃຊ້ງານ' : 'ເລືອກຊື່ຂອງທ່ານເພື່ອເຂົ້າໃຊ້ງານ';
+    $('logoutBtn').style.display = currentStaffName ? '' : 'none';
+    renderStaffPickerList();
+    openModal('staffPickerModal');
+  });
+
+  $('logoutBtn').addEventListener('click', ()=>{
+    clearSession();
+    currentStaffName = '';
+    currentAuthRole = 'guest';
+    closeModal('staffPickerModal');
+    afterAuthChange();
+    showLoginScreen();
+    toast('ອອກຈາກລະບົບແລ້ວ');
+  });
+
+  function renderStaffTable(){
+    const tbody = $('staffTableBody');
+    if(staff.length===0){
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">ຍັງບໍ່ມີພະນັກງານ</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = staff.map(s=>`
+      <tr data-id="${s.id}">
+        <td>${escapeHtml(s.name)}</td>
+        <td class="mono">${s.hasPin? '••••' : '-'}</td>
+        <td>${s.isManager? '<span class="badge ok">ຜູ້ຈັດການ</span>' : '<span class="badge low">ພະນັກງານ</span>'}</td>
+        <td><button class="btn btn-danger btn-sm del-staff-btn">ລຶບ</button></td>
+      </tr>`).join('');
+    tbody.querySelectorAll('.del-staff-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.closest('tr').dataset.id;
+        const s = staff.find(x=>x.id===id);
+        if(!confirm(`ຕ້ອງການລຶບພະນັກງານ "${s.name}" ບໍ?`)) return;
+        if(currentStaffName === s.name){
+          clearSession(); currentStaffName=''; currentAuthRole='guest';
+        }
+        staff = staff.filter(x=>x.id!==id);
+        await saveStaff();
+        renderStaffTable();
+        afterAuthChange();
+        toast('ລຶບພະນັກງານແລ້ວ');
+      });
+    });
+  }
+
+  $('manageStaffBtn').addEventListener('click', ()=>{
+    if(currentAuthRole !== 'manager'){ toast('ສະເພາະຜູ້ຈັດການເທົ່ານັ້ນທີ່ຈັດການພະນັກງານໄດ້'); return; }
+    closeModal('staffPickerModal');
+    renderStaffTable();
+    openModal('staffManageModal');
+  });
+
+  // If they close "manage staff" without having logged in yet, put the
+  // mandatory login screen back up instead of leaving them at a bare app.
+  document.querySelector('#staffManageModal [data-close="staffManageModal"]').addEventListener('click', ()=>{
+    if(!currentStaffName && staff.length>0) showLoginScreen();
+  });
+
+  $('addStaffBtn').addEventListener('click', async ()=>{
+    const name = $('staff_name').value.trim();
+    const pin = $('staff_pin').value.trim();
+    // The very first account created (before anyone has ever logged in) must
+    // be a manager — otherwise the shop would have no way to grant that
+    // permission afterward, since managing staff itself requires it.
+    const wasBootstrap = staff.length===0 && !currentStaffName;
+    const isManager = wasBootstrap ? true : $('staff_isManager').checked;
+    if(!name){ toast('ກະລຸນາປ້ອນຊື່ພະນັກງານ'); return; }
+    if(pin && !/^\d{4}$/.test(pin)){ toast('PIN ຕ້ອງເປັນໂຕເລກ 4 ໂຕ'); return; }
+    const newId = uid();
+    staff.push({ id: newId, name, pin: pin || '', hasPin: !!pin, isManager });
+    await saveStaff();
+    $('staff_name').value = '';
+    $('staff_pin').value = '';
+    $('staff_isManager').checked = false;
+    renderStaffTable();
+    toast(wasBootstrap ? `ເພີ່ມ ${name} ເປັນຜູ້ຈັດການຄົນທຳອິດ ແລະເຂົ້າສູ່ລະບົບໃຫ້ອັດຕະໂນມັດ` : 'ເພີ່ມພະນັກງານແລ້ວ');
+    if(wasBootstrap){
+      // Log in as the account we just created so the session is established —
+      // without this, the very next write (e.g. adding staff #2) would be
+      // rejected since bootstrap access only covers the first save.
+      try{
+        const auth = await loadAllAs(newId, pin);
+        if(auth.ok){ setSession(newId, pin); afterAuthChange(); }
+      }catch(e){ /* they can still log in manually via the picker */ }
+    }
+  });
+
+  // ---------- Settings ----------
+  $('settingsBtn').addEventListener('click', ()=>{
+    $('st_shopName').value = settings.shopName;
+    $('st_address').value = settings.address;
+    $('st_currency').value = settings.currency;
+    $('st_footer').value = settings.footer;
+    openModal('settingsModal');
+  });
+  $('saveSettingsBtn').addEventListener('click', async ()=>{
+    settings.shopName = $('st_shopName').value.trim() || 'ຮ້ານຄ້າຂອງຂ້ອຍ';
+    settings.address = $('st_address').value.trim();
+    settings.currency = $('st_currency').value.trim() || '₭';
+    settings.footer = $('st_footer').value.trim() || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ';
+    await saveSettings();
+    $('shopNameDisplay').textContent = settings.shopName;
+    closeModal('settingsModal');
+    renderProductGrid();
+    renderCart();
+    toast('ບັນທຶກການຕັ້ງຄ່າແລ້ວ');
+  });
+  $('openApiSetupFromSettingsBtn').addEventListener('click', ()=>{
+    closeModal('settingsModal');
+    openApiSetupModal(false);
+  });
+
+  // ---------- Keyboard: refocus scan input on POS tab ----------
+  document.addEventListener('click', (e)=>{
+    const posActive = $('panel-pos').classList.contains('active');
+    const overlayOpen = document.querySelector('.modal-overlay.show');
+    if(posActive && !overlayOpen && !e.target.closest('input, select, button, textarea')){
+      focusScan();
+    }
+  });
+
+  // ---------- Init / Cloud API setup ----------
+  function finishInit(){
+    $('shopNameDisplay').textContent = settings.shopName;
+    renderProductGrid();
+    renderCart();
+    renderStockTable();
+    renderHistoryTable();
+    renderPromoSelect();
+    updateStaffBtnLabel();
+    $('loadingScreen').style.display = 'none';
+    focusScan();
+  }
+
+  function openApiSetupModal(forceMode, errorMsg){
+    $('apiUrlInput').value = API_URL || '';
+    $('apiSetupError').style.display = errorMsg ? 'block' : 'none';
+    $('apiSetupError').textContent = errorMsg || '';
+    $('apiSetupModal').dataset.force = forceMode ? '1' : '0';
+    $('apiSetupCloseBtn').style.display = forceMode ? 'none' : '';
+    openModal('apiSetupModal');
+    setTimeout(()=>$('apiUrlInput').focus(), 50);
+  }
+
+  $('apiSetupCloseBtn').addEventListener('click', ()=> closeModal('apiSetupModal'));
+
+  $('apiSetupSaveBtn').addEventListener('click', async ()=>{
+    const url = $('apiUrlInput').value.trim();
+    if(!url){ $('apiSetupError').style.display='block'; $('apiSetupError').textContent='ກະລຸນາໃສ່ URL ຂອງ Apps Script Web App'; return; }
+    $('apiSetupSaveBtn').disabled = true;
+    $('apiSetupSaveBtn').textContent = 'ກຳລັງເຊື່ອມຕໍ່...';
+    API_URL = url;
+    try{
+      const auth = await loadAll();
+      localStorage.setItem('pos_cloud_api_url', url);
+      closeModal('apiSetupModal');
+      proceedAfterLoad(auth);
+      toast('ເຊື່ອມຕໍ່ Cloud ສຳເລັດ');
+    }catch(e){
+      $('apiSetupError').style.display = 'block';
+      $('apiSetupError').textContent = 'ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ' + e.message + ' — ກວດສອບ URL ແລະການຕັ້ງຄ່າການເຜີຍແຜ່ (Deploy) ໃນ Apps Script';
+    }finally{
+      $('apiSetupSaveBtn').disabled = false;
+      $('apiSetupSaveBtn').textContent = 'ເຊື່ອມຕໍ່';
+    }
+  });
+
+  $('syncBtn').addEventListener('click', async ()=>{
+    if(!API_URL){ openApiSetupModal(true); return; }
+    $('syncBtn').textContent = '⏳';
+    try{
+      const auth = await loadAll();
+      if(!auth.bootstrap && !(auth.ok && auth.role !== 'guest')){
+        // stored session no longer valid (PIN changed / staff removed)
+        clearSession();
+        afterAuthChange();
+        showLoginScreen();
+        toast('ເຊດຊັນໝົດອາຍຸ ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່');
+        return;
+      }
+      afterAuthChange();
+      $('shopNameDisplay').textContent = settings.shopName;
+      toast('ອັບເດດຂໍ້ມູນລ່າສຸດແລ້ວ');
+    }catch(e){
+      toast('ດຶງຂໍ້ມູນລ່າສຸດບໍ່ສຳເລັດ — ກວດສອບອິນເຕີເນັດ');
+    }finally{
+      $('syncBtn').textContent = '🔄';
+    }
+  });
+
+  // Decides, after any getAll(), whether to show the app or force a login —
+  // shared by init() and the API-setup flow.
+  function proceedAfterLoad(auth){
+    if(auth.bootstrap || (auth.ok && auth.role !== 'guest')){
+      finishInit();
+      return;
+    }
+    if(getSession()) clearSession(); // a stored session existed but was rejected
+    $('loadingScreen').style.display = 'none';
+    showLoginScreen();
+  }
+
+  async function init(){
+    if(!API_URL){
+      $('loadingScreen').style.display = 'none';
+      openApiSetupModal(true);
+      return;
+    }
+    try{
+      const auth = await loadAll();
+      proceedAfterLoad(auth);
+    }catch(e){
+      $('loadingScreen').style.display = 'none';
+      openApiSetupModal(true, 'ເຊື່ອມຕໍ່ບໍ່ສຳເລັດ: ' + e.message);
+    }
+  }
+  init();
+
+})();
+</script>
+</body>
+</html>
